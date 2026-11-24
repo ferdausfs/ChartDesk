@@ -33,6 +33,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -93,6 +95,7 @@ fun ChartScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showIndicatorsSheet by remember { mutableStateOf(false) }
     var showReplaySheet by remember { mutableStateOf(false) }
+    var chartKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(vm) {
         vm.events.collect { event ->
@@ -162,7 +165,7 @@ fun ChartScreen(
                 )
             }
             if (state.gridMode > 1) {
-                ChartGrid(state = state, vm = vm, modifier = Modifier.weight(1f).fillMaxWidth())
+                ChartGrid(state = state, vm = vm, chartKey = chartKey, modifier = Modifier.weight(1f).fillMaxWidth())
             } else Row(Modifier.weight(1f).fillMaxWidth()) {
                 if (!fullscreen) {
                     DrawingRail(
@@ -180,12 +183,19 @@ fun ChartScreen(
                     )
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    ChartWebView(vm.controller, Modifier.fillMaxSize())
+                    key(chartKey) { ChartWebView(vm.controller, Modifier.fillMaxSize()) }
                     when {
                         state.isLoading && state.candles.isEmpty() -> LoadingOverlay()
                         state.error != null && state.candles.isEmpty() -> ErrorOverlay(
                             message = state.error ?: "Market data unavailable",
                             onRetry = { vm.load() },
+                        )
+                        state.error != null && state.candles.isNotEmpty() && !state.chartReady -> ErrorOverlay(
+                            message = state.error ?: "Chart engine did not start",
+                            onRetry = {
+                                chartKey += 1
+                                vm.resendChart()
+                            },
                         )
                     }
                     if (state.offline && state.candles.isNotEmpty()) {
@@ -292,22 +302,22 @@ fun ChartScreen(
 }
 
 @Composable
-private fun ChartGrid(state: ChartUiState, vm: ChartViewModel, modifier: Modifier = Modifier) {
+private fun ChartGrid(state: ChartUiState, vm: ChartViewModel, chartKey: Int, modifier: Modifier = Modifier) {
     val palette = LocalChartDeskPalette.current
     val controllers = listOf(vm.controller) + (0 until (state.gridMode - 1)).mapNotNull { vm.secondaryController(it) }
     Column(modifier.background(palette.background)) {
         if (state.gridMode == 2) {
             controllers.forEachIndexed { index, controller ->
-                GridCell(controller, state, index == 0, Modifier.weight(1f))
+                GridCell(controller, state, chartKey, index == 0, Modifier.weight(1f))
             }
         } else {
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                controllers.getOrNull(0)?.let { GridCell(it, state, true, Modifier.weight(1f).fillMaxHeight()) }
-                controllers.getOrNull(1)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(0)?.let { GridCell(it, state, chartKey, true, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(1)?.let { GridCell(it, state, chartKey, false, Modifier.weight(1f).fillMaxHeight()) }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                controllers.getOrNull(2)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
-                controllers.getOrNull(3)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(2)?.let { GridCell(it, state, chartKey, false, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(3)?.let { GridCell(it, state, chartKey, false, Modifier.weight(1f).fillMaxHeight()) }
             }
         }
     }
@@ -317,12 +327,13 @@ private fun ChartGrid(state: ChartUiState, vm: ChartViewModel, modifier: Modifie
 private fun GridCell(
     controller: com.chartdesk.app.chart.ChartController,
     state: ChartUiState,
+    chartKey: Int,
     primary: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalChartDeskPalette.current
     Box(modifier.border(1.dp, palette.border)) {
-        ChartWebView(controller, Modifier.fillMaxSize())
+        key(chartKey) { ChartWebView(controller, Modifier.fillMaxSize()) }
         Text(
             "${state.symbol} · ${state.timeframe}",
             style = ChartDeskType.label,

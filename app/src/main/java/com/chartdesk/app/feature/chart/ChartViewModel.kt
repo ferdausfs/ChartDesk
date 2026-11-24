@@ -77,6 +77,7 @@ data class ChartUiState(
     val replayPnl: Double = 0.0,
     val replayPnlPercent: Double = 0.0,
     val gridMode: Int = 1,
+    val chartReady: Boolean = false,
 )
 
 @HiltViewModel
@@ -119,6 +120,7 @@ class ChartViewModel @Inject constructor(
                         )
                         broadcastCrosshair(event, controller)
                     }
+                    is ChartEvent.Ready -> _state.value = _state.value.copy(chartReady = true)
                     is ChartEvent.Unknown -> if (event.type == "crosshair-empty") clearCrosshair(controller)
                     is ChartEvent.ChartError -> _state.value = _state.value.copy(error = event.message)
                     is ChartEvent.DrawingsChanged -> persistDrawings(event.list)
@@ -327,6 +329,15 @@ class ChartViewModel @Inject constructor(
                     )
                 }
                 startLive()
+                viewModelScope.launch {
+                    delay(8_000)
+                    if (!controller.isReady()) {
+                        _state.value = _state.value.copy(
+                            error = "Chart engine did not start. Tap retry.",
+                            chartReady = false,
+                        )
+                    }
+                }
             } catch (t: Throwable) {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -561,6 +572,23 @@ class ChartViewModel @Inject constructor(
 
     fun resetView() {
         allControllers().forEach { it.send(ChartCommand.ResetView) }
+    }
+
+    fun resendChart() {
+        val s = _state.value
+        sendInit(lastSettings)
+        if (s.candles.isNotEmpty()) {
+            allControllers().forEach {
+                it.send(ChartCommand.SetCandles(s.symbol, s.timeframe, s.candles, s.precision, fit = true))
+            }
+        }
+        allControllers().forEach { it.send(ChartCommand.SetChartType(s.chartType)) }
+        controller.send(
+            ChartCommand.SetIndicators(
+                s.indicators.map { ChartCommand.IndicatorDto(it.uid, it.type, it.params, it.visible) },
+            ),
+        )
+        _state.value = _state.value.copy(error = null)
     }
 
     fun showError(message: String) = controller.send(ChartCommand.ShowError(message))

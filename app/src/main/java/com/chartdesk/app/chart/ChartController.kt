@@ -25,7 +25,14 @@ class ChartController @Inject constructor(private val json: Json) {
     private var webViewRef: WeakReference<WebView>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pending = ArrayDeque<ChartCommand>()
+    private val stateCommands = LinkedHashMap<String, ChartCommand>()
     private var ready = false
+
+    /** Commands that describe chart state and must be replayed when a fresh WebView attaches. */
+    private val replayable = setOf(
+        "init", "setCandles", "setTheme", "setOptions", "setIndicators", "setDrawings",
+        "setSymbol", "setTimeframe", "setChartType", "setPriceScale", "setPrecision",
+    )
 
     private val _events = MutableSharedFlow<ChartEvent>(
         replay = 0,
@@ -48,6 +55,7 @@ class ChartController @Inject constructor(private val json: Json) {
 
     fun send(command: ChartCommand) {
         mainHandler.post {
+            if (command.type in replayable) stateCommands[command.type] = command
             val view = webViewRef?.get()
             if (!ready || view == null) {
                 pending.addLast(command)
@@ -57,13 +65,29 @@ class ChartController @Inject constructor(private val json: Json) {
         }
     }
 
+    fun isReady(): Boolean = ready
+
+    /** Force the full state back into the page (used by the retry action). */
+    fun resendState() {
+        mainHandler.post {
+            val view = webViewRef?.get() ?: return@post
+            if (!ready) return@post
+            stateCommands.values.forEach { evaluate(view, it) }
+        }
+    }
+
     fun onJsMessage(raw: String) {
         val event = parse(raw)
         if (event is ChartEvent.Ready) {
             mainHandler.post {
                 ready = true
                 val view = webViewRef?.get() ?: return@post
-                while (pending.isNotEmpty()) evaluate(view, pending.removeFirst())
+                // Replay the latest state first, then any non-state commands (updates, crosshair…).
+                stateCommands.values.forEach { evaluate(view, it) }
+                while (pending.isNotEmpty()) {
+                    val command = pending.removeFirst()
+                    if (command.type !in stateCommands) evaluate(view, command)
+                }
             }
         }
         _events.tryEmit(event)

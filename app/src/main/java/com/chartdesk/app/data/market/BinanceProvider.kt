@@ -26,8 +26,9 @@ class BinanceProvider @Inject constructor(
 
     override val id: String = "binance"
 
-    private val restBase = "https://api.binance.com"
-    private val wsBase = "wss://stream.binance.com:9443/ws"
+    // data-api.binance.vision is Binance's market-data-only mirror; it is reachable in more regions.
+    private val restBases = listOf("https://data-api.binance.vision", "https://api.binance.com")
+    private val wsBases = listOf("wss://data-stream.binance.vision/ws", "wss://stream.binance.com:9443/ws")
 
     private var symbolCache: List<SymbolInfo> = emptyList()
 
@@ -42,32 +43,34 @@ class BinanceProvider @Inject constructor(
             .toList()
     }
 
-    private suspend fun fetchExchangeInfo(): List<SymbolInfo> {
-        val request = Request.Builder().url("$restBase/api/v3/exchangeInfo?permissions=SPOT").build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("exchangeInfo HTTP ${response.code}")
-            return BinanceParsers.parseExchangeInfo(response.body?.string().orEmpty())
+    private suspend fun <T> rest(path: String, parse: (String) -> T): T {
+        var last: Throwable? = null
+        for (base in restBases) {
+            try {
+                val request = Request.Builder().url("$base$path").build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                    return parse(response.body?.string().orEmpty())
+                }
+            } catch (t: Throwable) {
+                last = t
+            }
         }
+        throw last ?: IOException("No Binance endpoint reachable")
     }
 
-    override suspend fun candles(symbol: String, timeframe: String, limit: Int): List<Candle> {
-        val url = "$restBase/api/v3/klines?symbol=${symbol.uppercase()}&interval=${Timeframes.binance(timeframe)}&limit=${limit.coerceIn(20, 1000)}"
-        val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("klines HTTP ${response.code}")
-            return BinanceParsers.parseKlines(response.body?.string().orEmpty())
-        }
-    }
+    private suspend fun fetchExchangeInfo(): List<SymbolInfo> =
+        rest("/api/v3/exchangeInfo?permissions=SPOT") { BinanceParsers.parseExchangeInfo(it) }
+
+    override suspend fun candles(symbol: String, timeframe: String, limit: Int): List<Candle> =
+        rest(
+            "/api/v3/klines?symbol=${symbol.uppercase()}&interval=${Timeframes.binance(timeframe)}&limit=${limit.coerceIn(20, 1000)}",
+        ) { BinanceParsers.parseKlines(it) }
 
     override suspend fun tickers(symbols: List<String>): List<Ticker> {
         if (symbols.isEmpty()) return emptyList()
         val encoded = symbols.joinToString("%22,%22", prefix = "%5B%22", postfix = "%22%5D")
-        val url = "$restBase/api/v3/ticker/24hr?symbols=$encoded"
-        val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("tickers HTTP ${response.code}")
-            return BinanceParsers.parseTickers(response.body?.string().orEmpty())
-        }
+        return rest("/api/v3/ticker/24hr?symbols=$encoded") { BinanceParsers.parseTickers(it) }
     }
 
     override fun stream(symbol: String, timeframe: String): Flow<MarketEvent> = channelFlow {
@@ -76,7 +79,11 @@ class BinanceProvider @Inject constructor(
         while (isActive) {
             send(MarketEvent.Status(if (everConnected) ConnectionState.Reconnecting else ConnectionState.Connecting, attempt))
             try {
-                connectOnce(symbol.lowercase(), Timeframes.binance(timeframe)) { candle, closed ->
+                connectOnce(
+                    base = wsBases[attempt % wsBases.size],
+                    symbol = symbol.lowercase(),
+                    interval = Timeframes.binance(timeframe),
+                ) { candle, closed ->
                     trySend(MarketEvent.Bar(candle, closed))
                 }
                 attempt = 0
@@ -92,11 +99,12 @@ class BinanceProvider @Inject constructor(
     }
 
     private suspend fun connectOnce(
+        base: String,
         symbol: String,
         interval: String,
         onBar: (Candle, Boolean) -> Unit,
     ) = suspendCancellableCoroutine<Unit> { cont ->
-        val request = Request.Builder().url("$wsBase/${symbol}@kline_$interval").build()
+        val request = Request.Builder().url("$base/${symbol}@kline_$interval").build()
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 // Binance closes idle sockets after 24h; nothing to send, just stay open.

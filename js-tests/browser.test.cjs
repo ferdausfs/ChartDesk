@@ -39,20 +39,34 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   const browser = await puppeteer.launch({
     executablePath: chromePath(),
     headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--allow-file-access-from-files', '--force-device-scale-factor=1'],
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--allow-file-access-from-files',
+      '--force-device-scale-factor=1',
+    ],
     defaultViewport: { width: 420, height: 720, deviceScaleFactor: 1 },
   });
   t.after(() => browser.close());
 
   const page = await browser.newPage();
+  page.setDefaultTimeout(60000);
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push('console: ' + msg.text());
   });
+  page.on('requestfailed', (req) => errors.push('requestfailed: ' + req.url() + ' ' + (req.failure() && req.failure().errorText)));
 
   await page.goto('file://' + PAGE, { waitUntil: 'load' });
-  await page.waitForFunction('window.ChartDesk && window.ChartDesk.state && window.ChartDesk.state.chart');
+  try {
+    await page.waitForFunction('window.ChartDesk && window.ChartDesk.state && window.ChartDesk.state.chart');
+  } catch (e) {
+    const title = await page.title().catch(() => 'n/a');
+    const body = await page.evaluate(() => document.body.innerText.slice(0, 300)).catch(() => 'n/a');
+    throw new Error('Chart page did not boot. title=' + title + ' body=' + body + ' errors=' + JSON.stringify(errors));
+  }
 
   assert.strictEqual(await page.$eval('#attribution', (el) => el.textContent.includes('TradingView')), true);
 
