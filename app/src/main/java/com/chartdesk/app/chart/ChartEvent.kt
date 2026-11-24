@@ -17,6 +17,8 @@ sealed interface ChartEvent {
 
     data class Haptic(val kind: String) : ChartEvent
 
+    data class Log(val message: String) : ChartEvent
+
     data class ChartError(val message: String, val command: String?) : ChartEvent
 
     data class DrawingsChanged(val list: List<com.chartdesk.app.data.drawings.DrawingDto>) : ChartEvent

@@ -18,6 +18,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ fun SettingsSheet(
     onDefaultTimeframe: (String) -> Unit,
     onDefaultChartType: (String) -> Unit,
     onPriceScale: (String) -> Unit,
+    diagnostics: String,
+    onCopyDiagnostics: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val palette = LocalChartDeskPalette.current
@@ -120,6 +123,16 @@ fun SettingsSheet(
             }
 
             Spacer(Modifier.padding(top = 16.dp))
+            Text("Diagnostics", style = ChartDeskType.label, color = palette.textSecondary)
+            Text(
+                diagnostics,
+                style = ChartDeskType.label,
+                color = palette.textSecondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            TextButton(onClick = onCopyDiagnostics) { Text("Copy diagnostics", color = palette.accent) }
+
+            Spacer(Modifier.padding(top = 8.dp))
             Text(
                 "Charts by TradingView · lightweight-charts (Apache-2.0). ChartDesk is not affiliated with TradingView.",
                 style = ChartDeskType.label,

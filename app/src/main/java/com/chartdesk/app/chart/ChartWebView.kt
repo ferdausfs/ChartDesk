@@ -37,9 +37,11 @@ fun ChartWebView(controller: ChartController, modifier: Modifier = Modifier) {
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    allowFileAccess = false
+                    allowFileAccess = true
                     allowContentAccess = false
-                    blockNetworkLoads = true
+                    // Network is blocked at the request layer instead; some OEM WebViews mis-handle
+                    // blockNetworkLoads=true for local assets.
+                    blockNetworkLoads = false
                     cacheMode = WebSettings.LOAD_DEFAULT
                     setSupportZoom(false)
                     builtInZoomControls = false

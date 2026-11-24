@@ -1067,6 +1067,15 @@
   els.chart.addEventListener('pointercancel', endPress);
   els.chart.addEventListener('pointerleave', endPress);
 
+  var consoleError = console.error;
+  console.error = function () {
+    try {
+      var text = Array.prototype.slice.call(arguments).map(String).join(' ');
+      post('log', { message: text.slice(0, 300) });
+    } catch (e) { /* ignore */ }
+    if (consoleError) consoleError.apply(console, arguments);
+  };
+
   window.addEventListener('error', function (e) {
     post('error', { message: String(e.message || 'JS error'), source: 'window' });
   });

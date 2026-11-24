@@ -1,6 +1,9 @@
 package com.chartdesk.app.ui.screens
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,6 +100,15 @@ fun ChartScreen(
     var showReplaySheet by remember { mutableStateOf(false) }
     var chartKey by remember { mutableIntStateOf(0) }
 
+    val diagnostics = buildString {
+        appendLine("ChartDesk ${BuildConfig.VERSION_NAME}")
+        appendLine("symbol=${state.symbol} tf=${state.timeframe} bars=${state.candles.size}")
+        appendLine("ready=${state.chartReady} loading=${state.isLoading} offline=${state.offline}")
+        appendLine("connection=${state.connection} error=${state.error}")
+        appendLine("log=${state.lastBridgeLog}")
+        append(vm.controller.diagnostics())
+    }
+
     LaunchedEffect(vm) {
         vm.events.collect { event ->
             when (event) {
@@ -104,6 +116,14 @@ fun ChartScreen(
                 is ChartEvent.ChartError -> snackbar.showSnackbar(event.message)
                 else -> Unit
             }
+        }
+    }
+
+    LaunchedEffect(state.error, state.chartReady) {
+        if (state.error != null && state.candles.isNotEmpty() && !state.chartReady && chartKey == 0) {
+            kotlinx.coroutines.delay(1_200)
+            chartKey = 1
+            vm.resendChart()
         }
     }
 
@@ -189,6 +209,7 @@ fun ChartScreen(
                         state.error != null && state.candles.isEmpty() -> ErrorOverlay(
                             message = state.error ?: "Market data unavailable",
                             onRetry = { vm.load() },
+                            diagnostics = diagnostics,
                         )
                         state.error != null && state.candles.isNotEmpty() && !state.chartReady -> ErrorOverlay(
                             message = state.error ?: "Chart engine did not start",
@@ -196,6 +217,7 @@ fun ChartScreen(
                                 chartKey += 1
                                 vm.resendChart()
                             },
+                            diagnostics = diagnostics,
                         )
                     }
                     if (state.offline && state.candles.isNotEmpty()) {
@@ -296,6 +318,12 @@ fun ChartScreen(
             onDefaultTimeframe = settingsVm::setDefaultTimeframe,
             onDefaultChartType = settingsVm::setDefaultChartType,
             onPriceScale = settingsVm::setPriceScale,
+            diagnostics = diagnostics,
+            onCopyDiagnostics = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("ChartDesk diagnostics", diagnostics))
+                scope.launch { snackbar.showSnackbar("Diagnostics copied") }
+            },
             onDismiss = { showSettingsSheet = false },
         )
     }
@@ -360,14 +388,15 @@ private fun LoadingOverlay() {
 }
 
 @Composable
-private fun ErrorOverlay(message: String, onRetry: () -> Unit) {
+private fun ErrorOverlay(message: String, onRetry: () -> Unit, diagnostics: String) {
     val palette = LocalChartDeskPalette.current
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Market data unavailable", style = MaterialTheme.typography.titleSmall, color = palette.textPrimary)
+        Text("Chart unavailable", style = MaterialTheme.typography.titleSmall, color = palette.textPrimary)
         Text(
             message,
             style = ChartDeskType.label,
@@ -375,6 +404,10 @@ private fun ErrorOverlay(message: String, onRetry: () -> Unit) {
             modifier = Modifier.padding(top = 6.dp),
         )
         TextButton(onClick = onRetry) { Text("Retry", color = palette.accent) }
+        TextButton(onClick = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("ChartDesk diagnostics", diagnostics))
+        }) { Text("Copy diagnostics", color = palette.textSecondary) }
     }
 }
 

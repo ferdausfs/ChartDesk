@@ -67,6 +67,11 @@ class ChartController @Inject constructor(private val json: Json) {
 
     fun isReady(): Boolean = ready
 
+    fun userAgent(): String = webViewRef?.get()?.settings?.userAgentString ?: "unknown"
+
+    fun diagnostics(): String =
+        "ready=$ready, queue=${pending.size}, ua=" + userAgent()
+
     /** Force the full state back into the page (used by the retry action). */
     fun resendState() {
         mainHandler.post {

@@ -78,6 +78,7 @@ object ChartEventParser {
                         shapes = payload["shapes"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
                     )
                 }
+                "log" -> ChartEvent.Log(str("message") ?: "")
                 "haptic" -> ChartEvent.Haptic(str("kind") ?: "tap")
                 "error" -> ChartEvent.ChartError(str("message") ?: "chart error", str("command"))
                 "ack" -> ChartEvent.Ack(str("id") ?: "")

@@ -78,6 +78,7 @@ data class ChartUiState(
     val replayPnlPercent: Double = 0.0,
     val gridMode: Int = 1,
     val chartReady: Boolean = false,
+    val lastBridgeLog: String = "",
 )
 
 @HiltViewModel
@@ -121,6 +122,7 @@ class ChartViewModel @Inject constructor(
                         broadcastCrosshair(event, controller)
                     }
                     is ChartEvent.Ready -> _state.value = _state.value.copy(chartReady = true)
+                    is ChartEvent.Log -> _state.value = _state.value.copy(lastBridgeLog = event.message)
                     is ChartEvent.Unknown -> if (event.type == "crosshair-empty") clearCrosshair(controller)
                     is ChartEvent.ChartError -> _state.value = _state.value.copy(error = event.message)
                     is ChartEvent.DrawingsChanged -> persistDrawings(event.list)
