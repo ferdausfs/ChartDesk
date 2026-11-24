@@ -1,0 +1,102 @@
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const puppeteer = require('puppeteer-core');
+
+const PAGE = path.resolve(__dirname, '..', 'app', 'src', 'main', 'assets', 'chart', 'index.html');
+
+function chromePath() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    '/snap/bin/chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ].filter(Boolean);
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (!found) throw new Error('No Chrome/Chromium binary found; set CHROME_PATH');
+  return found;
+}
+
+function candleSeries(count) {
+  const start = 1_700_000_000;
+  let price = 100;
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const open = price;
+    const close = open + Math.sin(i / 3) * 0.8 + 0.15;
+    const high = Math.max(open, close) + 0.4;
+    const low = Math.min(open, close) - 0.4;
+    rows.push([start + i * 60, open, high, low, close, 10 + i]);
+    price = close;
+  }
+  return rows;
+}
+
+test('chart page boots and applies bridge commands without errors', async (t) => {
+  const browser = await puppeteer.launch({
+    executablePath: chromePath(),
+    headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--allow-file-access-from-files', '--force-device-scale-factor=1'],
+    defaultViewport: { width: 420, height: 720, deviceScaleFactor: 1 },
+  });
+  t.after(() => browser.close());
+
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push('console: ' + msg.text());
+  });
+
+  await page.goto('file://' + PAGE, { waitUntil: 'load' });
+  await page.waitForFunction('window.ChartDesk && window.ChartDesk.state && window.ChartDesk.state.chart');
+
+  assert.strictEqual(await page.$eval('#attribution', (el) => el.textContent.includes('TradingView')), true);
+
+  const rows = candleSeries(80);
+  await page.evaluate((candles) => {
+    window.ChartDesk.handle(JSON.stringify({
+      type: 'setCandles',
+      payload: { symbol: 'BTCUSDT', timeframe: '1m', precision: 2, candles },
+    }));
+  }, rows);
+
+  await page.waitForFunction('window.ChartDesk.state.raw.length === 80');
+  assert.strictEqual(await page.$eval('#legend-symbol', (el) => el.textContent), 'BTCUSDT');
+  assert.strictEqual(await page.$eval('#skeleton', (el) => el.classList.contains('hidden')), true);
+  assert.ok((await page.$$('canvas')).length > 0, 'lightweight-charts canvas should exist');
+
+  for (const type of ['line', 'area', 'bar', 'heikin', 'candle']) {
+    await page.evaluate((value) => {
+      window.ChartDesk.handle(JSON.stringify({ type: 'setChartType', payload: { type: value } }));
+    }, type);
+    assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.type), type);
+  }
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'setPriceScale', payload: { mode: 'log' } }));
+  });
+  assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.scaleMode), 'log');
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'setTheme', payload: { dark: false, colorBlind: true } }));
+  });
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light');
+  assert.strictEqual(await page.evaluate(() => document.documentElement.getAttribute('data-cb')), 'true');
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'updateCandle', payload: { candle: [1700004800, 1, 2, 0.5, 1.5, 4] } }));
+  });
+  await page.waitForFunction('window.ChartDesk.state.raw[window.ChartDesk.state.raw.length - 1].time === 1700004800');
+
+  // Unknown commands must be ignored, not thrown.
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'no-such-command', payload: {} }));
+  });
+  assert.strictEqual(await page.evaluate(() => typeof window.ChartDesk.handle), 'function');
+
+  assert.deepStrictEqual(errors, [], 'chart page should have no JS errors');
+});

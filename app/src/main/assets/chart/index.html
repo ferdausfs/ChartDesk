@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>ChartDesk chart</title>
+  <link rel="stylesheet" href="tokens.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="chart"></div>
+
+    <div id="legend" aria-live="polite">
+      <div class="row"><span class="sym" id="legend-symbol">—</span><span class="tf" id="legend-tf">—</span></div>
+      <div class="row">
+        <span>O <span class="val" id="legend-o">—</span></span>
+        <span>H <span class="val" id="legend-h">—</span></span>
+        <span>L <span class="val" id="legend-l">—</span></span>
+        <span>C <span class="val" id="legend-c">—</span></span>
+        <span id="legend-chg" class="val">—</span>
+      </div>
+      <div class="row"><span>Vol <span class="val" id="legend-vol">—</span></span></div>
+    </div>
+
+    <div id="skeleton">
+      <div class="bars">
+        <div class="bar" style="height: 22px"></div>
+        <div class="bar" style="height: 40px"></div>
+        <div class="bar" style="height: 30px"></div>
+        <div class="bar" style="height: 52px"></div>
+        <div class="bar" style="height: 44px"></div>
+        <div class="bar" style="height: 60px"></div>
+        <div class="bar" style="height: 36px"></div>
+      </div>
+    </div>
+
+    <div id="error-toast" role="alert"></div>
+    <div id="attribution">Charts by TradingView · lightweight-charts (Apache-2.0)</div>
+  </div>
+
+  <script src="lightweight-charts.standalone.production.js"></script>
+  <script src="lib.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "chartdesk-js-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Headless browser + unit tests for the ChartDesk chart layer",
+  "scripts": {
+    "test": "node --test lib.test.cjs browser.test.cjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.6.0"
+  }
+}
