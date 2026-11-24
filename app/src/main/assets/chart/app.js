@@ -410,6 +410,23 @@
     }
   }
 
+  function setOptions(payload) {
+    var showGrid = payload.grid !== false;
+    var showCrosshair = payload.crosshair !== false;
+    var showWatermark = payload.watermark !== false;
+    state.chart.applyOptions({
+      grid: {
+        vertLines: { visible: showGrid },
+        horzLines: { visible: showGrid },
+      },
+      crosshair: {
+        mode: showCrosshair ? LWC.CrosshairMode.Normal : LWC.CrosshairMode.Hidden,
+      },
+      watermark: { visible: showWatermark },
+    });
+    state.options = { grid: showGrid, crosshair: showCrosshair, watermark: showWatermark };
+  }
+
   function setWatermark(text) {
     state.watermark = text || 'ChartDesk';
     state.chart.applyOptions({ watermark: { visible: true, text: state.watermark } });
@@ -445,6 +462,7 @@
         case 'resetView': resetView(); break;
         case 'setWatermark': setWatermark(payload.text); break;
         case 'setPrecision': state.precision = payload.precision; applyData(false); break;
+        case 'setOptions': setOptions(payload); break;
         case 'showError': toast(payload.message || 'Chart error'); break;
         default:
           if (window.ChartDeskExt && typeof window.ChartDeskExt.handle === 'function') {

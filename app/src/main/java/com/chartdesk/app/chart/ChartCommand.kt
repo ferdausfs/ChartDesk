@@ -106,6 +106,19 @@ sealed interface ChartCommand {
         override fun payload(): JsonObject = buildJsonObject { put("symbol", symbol) }
     }
 
+    data class SetOptions(
+        val grid: Boolean = true,
+        val crosshair: Boolean = true,
+        val watermark: Boolean = true,
+    ) : ChartCommand {
+        override val type = "setOptions"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("grid", grid)
+            put("crosshair", crosshair)
+            put("watermark", watermark)
+        }
+    }
+
     data class ShowError(val message: String) : ChartCommand {
         override val type = "showError"
         override fun payload(): JsonObject = buildJsonObject { put("message", message) }

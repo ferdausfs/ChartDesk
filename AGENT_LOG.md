@@ -4,6 +4,25 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 4)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 4 — toolbar & layout.
+- **What changed:** real top toolbar (symbol block, timeframe pill, chart-type menu, indicators placeholder,
+  screenshot, settings, fullscreen); DataStore-backed settings sheet (theme dark/light/auto, colour-blind palette,
+  haptics, grid, crosshair, watermark, price scale, launch defaults); theme now applied app-wide from settings;
+  immersive fullscreen (system bars hidden, bottom bar collapses); screenshot via `PixelCopy` + FileProvider share;
+  landscape layout with left rail + right watchlist placeholder and no bottom bar; shared UI components
+  (`ui/components/Common.kt`); chart bridge gained `setOptions` for grid/crosshair/watermark.
+- **Touched files:** `ui/chart/ChartToolbar.kt`, `ui/settings/SettingsSheet.kt`, `ui/nav/ChartDeskRoot.kt`,
+  `ui/screens/ChartScreen.kt`, `feature/chart/ChartViewModel.kt`, `feature/settings/*`, `data/settings/*`,
+  `chart/{ChartCommand,ChartController,ScreenshotManager}.kt`, `assets/chart/app.js`, manifest + FileProvider.
+- **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (23 JVM tests); JS tests unchanged and green.
+- **Commit:** `__HASH__`.
+- **Pending:** feature 5 (watchlist).
+- **Notes:** settings flows are the single source for theme; chart theme is pushed through the bridge so the WebView
+  never diverges from the Compose shell.
+
 ## 2026-11-24 — Session 1 (features 1–3)
 
 - **Agent / tool:** OpenCode Android agent (DeepSeek V4.1 Flash) authoring; `dev-server` for build, tests, git.
@@ -21,7 +40,7 @@ Newest entries first. Never delete an entry.
 - **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (23 JVM tests); `npm test --prefix js-tests`
   green (9 tests incl. headless Chromium chart boot, 5 chart types, theme, scale, live update, bad-command safety);
   debug APK 18.7 MB produced.
-- **Commit:** see `git log` on `main` (initial feature commit, hash `__HASH__`).
+- **Commit:** `3fbe8fa` — feat: bootstrap shell, chart core and live Binance feed.
 - **Decisions:**
   - Robolectric removed: this server is `linux/arm64` and Robolectric 4.13 cannot load Conscrypt's JNI provider
     (`no conscrypt_openjdk_jni-linux-aarch_64`), so every Robolectric test fails before running. DoD fallback used:

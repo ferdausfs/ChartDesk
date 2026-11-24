@@ -1,33 +1,27 @@
 package com.chartdesk.app.ui.screens
 
+import android.app.Activity
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -37,67 +31,120 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chartdesk.app.BuildConfig
 import com.chartdesk.app.chart.ChartEvent
 import com.chartdesk.app.chart.ChartWebView
-import com.chartdesk.app.data.formatPrice
-import com.chartdesk.app.data.formatSignedPercent
+import com.chartdesk.app.chart.ScreenshotManager
 import com.chartdesk.app.data.market.ConnectionState
 import com.chartdesk.app.data.market.SymbolInfo
-import com.chartdesk.app.data.market.Timeframes
 import com.chartdesk.app.feature.chart.ChartUiState
 import com.chartdesk.app.feature.chart.ChartViewModel
+import com.chartdesk.app.feature.settings.SettingsViewModel
+import com.chartdesk.app.ui.chart.ChartToolbar
+import com.chartdesk.app.ui.chart.TimeframeSheetContent
+import com.chartdesk.app.ui.settings.SettingsSheet
 import com.chartdesk.app.ui.theme.ChartDeskType
 import com.chartdesk.app.ui.theme.LocalChartDeskPalette
+import kotlinx.coroutines.launch
 
-private val chartTypes = listOf(
-    "candle" to "Candles",
-    "heikin" to "Heikin",
-    "line" to "Line",
-    "area" to "Area",
-    "bar" to "Bars",
-)
-
-private val scaleModes = listOf("normal", "log", "percent")
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChartScreen(vm: ChartViewModel = hiltViewModel()) {
+fun ChartScreen(
+    fullscreen: Boolean,
+    onToggleFullscreen: () -> Unit,
+    vm: ChartViewModel = hiltViewModel(),
+    settingsVm: SettingsViewModel = hiltViewModel(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val settings by settingsVm.settings.collectAsStateWithLifecycle()
     val palette = LocalChartDeskPalette.current
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
     val snackbar = remember { SnackbarHostState() }
+    var showTimeframeSheet by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm) {
         vm.events.collect { event ->
             when (event) {
-                is ChartEvent.Haptic -> haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                is ChartEvent.Haptic -> if (settings.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 is ChartEvent.ChartError -> snackbar.showSnackbar(event.message)
                 else -> Unit
             }
         }
     }
 
+    LaunchedEffect(fullscreen) {
+        val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (fullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    fun takeScreenshot() {
+        val activity = context as? Activity ?: return
+        val chartView = vm.controller.webView() ?: return
+        scope.launch {
+            val bitmap = ScreenshotManager.capture(activity, chartView)
+            if (bitmap == null) {
+                snackbar.showSnackbar("Screenshot failed")
+                return@launch
+            }
+            val file = ScreenshotManager.save(activity, bitmap)
+            val uri = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            runCatching {
+                context.startActivity(Intent.createChooser(share, "Share chart"))
+            }
+            snackbar.showSnackbar("Saved to ${file.absolutePath}")
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(palette.background)) {
         Column(Modifier.fillMaxSize()) {
-            ChartHeader(state = state, onSymbolClick = vm::openSymbolPicker)
-            TimeframeBar(current = state.timeframe, onSelect = vm::setTimeframe)
-            ChartControlBar(
-                state = state,
-                onType = vm::setChartType,
-                onScale = vm::setPriceScale,
-                onReset = vm::resetView,
-            )
+            if (!fullscreen) {
+                ChartToolbar(
+                    state = state,
+                    fullscreen = fullscreen,
+                    onSymbolClick = vm::openSymbolPicker,
+                    onTimeframeClick = { showTimeframeSheet = true },
+                    onChartType = vm::setChartType,
+                    onIndicators = { scope.launch { snackbar.showSnackbar("Indicators arrive in feature 6") } },
+                    onSettings = { showSettingsSheet = true },
+                    onScreenshot = ::takeScreenshot,
+                    onToggleFullscreen = onToggleFullscreen,
+                )
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 ChartWebView(vm.controller, Modifier.fillMaxSize())
                 when {
@@ -126,150 +173,29 @@ fun ChartScreen(vm: ChartViewModel = hiltViewModel()) {
             onDismiss = vm::closeSymbolPicker,
         )
     }
-}
 
-@Composable
-private fun ChartHeader(state: ChartUiState, onSymbolClick: () -> Unit) {
-    val palette = LocalChartDeskPalette.current
-    val up = state.changePercent >= 0
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier.weight(1f).clickable(onClick = onSymbolClick),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = state.symbol,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = palette.textPrimary,
-                    )
-                    Spacer(Modifier.padding(horizontal = 4.dp))
-                    ConnectionDot(state.connection)
-                }
-                Text(
-                    text = if (state.offline) "Cached data" else "Binance spot",
-                    style = ChartDeskType.label,
-                    color = palette.textSecondary,
-                )
+    if (showTimeframeSheet) {
+        ModalBottomSheet(onDismissRequest = { showTimeframeSheet = false }, containerColor = palette.surface) {
+            TimeframeSheetContent(current = state.timeframe) { tf ->
+                showTimeframeSheet = false
+                vm.setTimeframe(tf)
             }
-            Icon(
-                Icons.Outlined.Search,
-                contentDescription = "Change symbol",
-                tint = palette.textSecondary,
-                modifier = Modifier.padding(start = 8.dp).size(16.dp),
-            )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = formatPrice(state.lastPrice, state.precision),
-                style = ChartDeskType.priceLarge,
-                color = if (up) palette.up else palette.down,
-            )
-            Text(
-                text = formatSignedPercent(state.changePercent),
-                style = ChartDeskType.price,
-                color = if (up) palette.up else palette.down,
-            )
         }
     }
-}
 
-@Composable
-private fun ConnectionDot(state: ConnectionState) {
-    val palette = LocalChartDeskPalette.current
-    val color = when (state) {
-        ConnectionState.Live -> palette.up
-        ConnectionState.Connecting, ConnectionState.Reconnecting -> palette.warning
-        ConnectionState.Offline -> palette.down
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(color))
-        Text(
-            text = when (state) {
-                ConnectionState.Live -> "LIVE"
-                ConnectionState.Connecting -> "…"
-                ConnectionState.Reconnecting -> "RETRY"
-                ConnectionState.Offline -> "OFFLINE"
-            },
-            style = ChartDeskType.label,
-            color = color,
-            modifier = Modifier.padding(start = 3.dp),
-        )
-    }
-}
-
-@Composable
-private fun TimeframeBar(current: String, onSelect: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Timeframes.all.forEach { tf ->
-            ChartChip(label = tf, selected = tf == current) { onSelect(tf) }
-        }
-    }
-}
-
-@Composable
-private fun ChartControlBar(
-    state: ChartUiState,
-    onType: (String) -> Unit,
-    onScale: (String) -> Unit,
-    onReset: () -> Unit,
-) {
-    val palette = LocalChartDeskPalette.current
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        chartTypes.forEach { (key, label) ->
-            ChartChip(label = label, selected = state.chartType == key) { onType(key) }
-        }
-        ChartChip(
-            label = when (state.priceScale) {
-                "log" -> "Log"
-                "percent" -> "%"
-                else -> "Auto"
-            },
-            selected = false,
-        ) {
-            val idx = scaleModes.indexOf(state.priceScale)
-            onScale(scaleModes[(idx + 1) % scaleModes.size])
-        }
-        IconButton(onClick = onReset, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Outlined.Tune, contentDescription = "Reset chart view", tint = palette.textSecondary)
-        }
-    }
-}
-
-@Composable
-private fun ChartChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val palette = LocalChartDeskPalette.current
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) palette.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
-            .border(
-                1.dp,
-                if (selected) palette.accent.copy(alpha = 0.6f) else palette.border,
-                RoundedCornerShape(6.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = label,
-            style = ChartDeskType.label,
-            color = if (selected) palette.accent else palette.textSecondary,
+    if (showSettingsSheet) {
+        SettingsSheet(
+            settings = settings,
+            onThemeMode = settingsVm::setThemeMode,
+            onColorBlind = settingsVm::setColorBlind,
+            onHaptics = settingsVm::setHaptics,
+            onGrid = settingsVm::setGrid,
+            onCrosshair = settingsVm::setCrosshair,
+            onWatermark = settingsVm::setWatermark,
+            onDefaultTimeframe = settingsVm::setDefaultTimeframe,
+            onDefaultChartType = settingsVm::setDefaultChartType,
+            onPriceScale = settingsVm::setPriceScale,
+            onDismiss = { showSettingsSheet = false },
         )
     }
 }
@@ -328,11 +254,7 @@ private fun SymbolPickerDialog(
 ) {
     val palette = LocalChartDeskPalette.current
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = palette.surface,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        Surface(shape = RoundedCornerShape(10.dp), color = palette.surface, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
                 Text("Symbol", style = MaterialTheme.typography.titleSmall, color = palette.textPrimary)
                 OutlinedTextField(
@@ -366,6 +288,7 @@ private fun SymbolRow(info: SymbolInfo, selected: Boolean, onClick: () -> Unit) 
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
             .background(if (selected) palette.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .border(0.dp, palette.border)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

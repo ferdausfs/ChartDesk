@@ -1,5 +1,7 @@
 package com.chartdesk.app.feature.chart
 
+import android.content.Context
+import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chartdesk.app.chart.ChartCommand
@@ -12,7 +14,10 @@ import com.chartdesk.app.data.market.ConnectionState
 import com.chartdesk.app.data.market.MarketEvent
 import com.chartdesk.app.data.market.MarketRepository
 import com.chartdesk.app.data.market.SymbolInfo
+import com.chartdesk.app.data.settings.AppSettings
+import com.chartdesk.app.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class ChartUiState(
@@ -46,6 +53,8 @@ data class ChartUiState(
 class ChartViewModel @Inject constructor(
     val controller: ChartController,
     private val repository: MarketRepository,
+    private val settingsRepository: SettingsRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChartUiState())
@@ -70,22 +79,50 @@ class ChartViewModel @Inject constructor(
                 }
             }
         }
-        sendInit()
-        load(initial = true)
+        viewModelScope.launch {
+            val initial = settingsRepository.settings.first()
+            applySettings(initial, initialLoad = true)
+            sendInit(initial)
+            load()
+            settingsRepository.settings.drop(1).collect { applySettings(it, initialLoad = false) }
+        }
     }
 
-    private fun sendInit() {
+    private fun isDark(mode: String): Boolean = when (mode) {
+        "light" -> false
+        "dark" -> true
+        else -> (appContext.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun sendInit(settings: AppSettings) {
         val s = _state.value
         controller.send(
             ChartCommand.Init(
-                dark = true,
-                colorBlind = false,
+                dark = isDark(settings.themeMode),
+                colorBlind = settings.colorBlind,
                 chartType = s.chartType,
                 priceScale = s.priceScale,
                 symbol = s.symbol,
                 timeframe = s.timeframe,
             ),
         )
+    }
+
+    private fun applySettings(settings: AppSettings, initialLoad: Boolean) {
+        if (initialLoad) {
+            _state.value = _state.value.copy(
+                timeframe = settings.defaultTimeframe,
+                chartType = settings.defaultChartType,
+                priceScale = settings.priceScale,
+            )
+        }
+        controller.send(ChartCommand.SetTheme(isDark(settings.themeMode), settings.colorBlind))
+        controller.send(ChartCommand.SetOptions(settings.showGrid, settings.showCrosshair, settings.showWatermark))
+        if (!initialLoad && settings.priceScale != _state.value.priceScale) {
+            _state.value = _state.value.copy(priceScale = settings.priceScale)
+            controller.send(ChartCommand.SetPriceScale(settings.priceScale))
+        }
     }
 
     fun load(initial: Boolean = false) {
@@ -199,12 +236,6 @@ class ChartViewModel @Inject constructor(
         if (type == _state.value.chartType) return
         _state.value = _state.value.copy(chartType = type)
         controller.send(ChartCommand.SetChartType(type))
-    }
-
-    fun setPriceScale(mode: String) {
-        if (mode == _state.value.priceScale) return
-        _state.value = _state.value.copy(priceScale = mode)
-        controller.send(ChartCommand.SetPriceScale(mode))
     }
 
     fun resetView() = controller.send(ChartCommand.ResetView)

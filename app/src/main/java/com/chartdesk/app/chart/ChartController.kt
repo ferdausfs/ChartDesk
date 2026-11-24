@@ -44,6 +44,8 @@ class ChartController @Inject constructor(private val json: Json) {
         ready = false
     }
 
+    fun webView(): WebView? = webViewRef?.get()
+
     fun send(command: ChartCommand) {
         mainHandler.post {
             val view = webViewRef?.get()
