@@ -61,6 +61,7 @@ import com.chartdesk.app.feature.chart.ChartUiState
 import com.chartdesk.app.feature.chart.ChartViewModel
 import com.chartdesk.app.feature.settings.SettingsViewModel
 import com.chartdesk.app.ui.chart.ChartToolbar
+import com.chartdesk.app.ui.chart.IndicatorsSheet
 import com.chartdesk.app.ui.chart.TimeframeSheetContent
 import com.chartdesk.app.ui.settings.SettingsSheet
 import com.chartdesk.app.ui.theme.ChartDeskType
@@ -85,6 +86,7 @@ fun ChartScreen(
     val snackbar = remember { SnackbarHostState() }
     var showTimeframeSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showIndicatorsSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm) {
         vm.events.collect { event ->
@@ -139,7 +141,7 @@ fun ChartScreen(
                     onSymbolClick = vm::openSymbolPicker,
                     onTimeframeClick = { showTimeframeSheet = true },
                     onChartType = vm::setChartType,
-                    onIndicators = { scope.launch { snackbar.showSnackbar("Indicators arrive in feature 6") } },
+                    onIndicators = { showIndicatorsSheet = true },
                     onSettings = { showSettingsSheet = true },
                     onScreenshot = ::takeScreenshot,
                     onToggleFullscreen = onToggleFullscreen,
@@ -181,6 +183,15 @@ fun ChartScreen(
                 vm.setTimeframe(tf)
             }
         }
+    }
+
+    if (showIndicatorsSheet) {
+        IndicatorsSheet(
+            active = state.indicators,
+            onToggle = vm::toggleIndicator,
+            onParams = vm::updateIndicatorParams,
+            onDismiss = { showIndicatorsSheet = false },
+        )
     }
 
     if (showSettingsSheet) {

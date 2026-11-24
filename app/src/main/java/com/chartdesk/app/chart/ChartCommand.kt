@@ -106,6 +106,27 @@ sealed interface ChartCommand {
         override fun payload(): JsonObject = buildJsonObject { put("symbol", symbol) }
     }
 
+    data class IndicatorDto(
+        val uid: String,
+        val type: String,
+        val params: Map<String, Double>,
+        val visible: Boolean,
+    )
+
+    data class SetIndicators(val list: List<IndicatorDto>) : ChartCommand {
+        override val type = "setIndicators"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("list", JsonArray(list.map { dto ->
+                buildJsonObject {
+                    put("uid", dto.uid)
+                    put("type", dto.type)
+                    put("visible", dto.visible)
+                    put("params", buildJsonObject { dto.params.forEach { (key, value) -> put(key, value) } })
+                }
+            }))
+        }
+    }
+
     data class SetOptions(
         val grid: Boolean = true,
         val crosshair: Boolean = true,

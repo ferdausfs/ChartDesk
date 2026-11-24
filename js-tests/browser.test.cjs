@@ -92,6 +92,28 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   });
   await page.waitForFunction('window.ChartDesk.state.raw[window.ChartDesk.state.raw.length - 1].time === 1700004800');
 
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({
+      type: 'setIndicators',
+      payload: {
+        list: [
+          { uid: 'ma', type: 'ma', params: { period: 20 }, visible: true },
+          { uid: 'rsi', type: 'rsi', params: { period: 14 }, visible: true },
+          { uid: 'macd', type: 'macd', params: { fast: 12, slow: 26, signal: 9 }, visible: true },
+        ],
+      },
+    }));
+  });
+  await page.waitForFunction("Object.keys(window.ChartDesk.state.panes).length === 2");
+  assert.strictEqual(await page.evaluate(() => document.querySelectorAll('.pane').length), 2);
+  assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.indicators.length), 3);
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'setIndicators', payload: { list: [] } }));
+  });
+  await page.waitForFunction("Object.keys(window.ChartDesk.state.panes).length === 0");
+  assert.strictEqual(await page.evaluate(() => document.querySelectorAll('.pane').length), 0);
+
   // Unknown commands must be ignored, not thrown.
   await page.evaluate(() => {
     window.ChartDesk.handle(JSON.stringify({ type: 'no-such-command', payload: {} }));

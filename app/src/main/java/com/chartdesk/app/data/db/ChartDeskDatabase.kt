@@ -62,6 +62,31 @@ data class WatchlistItemEntity(
     val sortOrder: Int,
 )
 
+@Entity(tableName = "indicators", primaryKeys = ["symbol", "uid"])
+data class IndicatorEntity(
+    val symbol: String,
+    val uid: String,
+    val type: String,
+    val paramsJson: String,
+    val visible: Boolean,
+    val sortOrder: Int,
+)
+
+@Dao
+interface IndicatorDao {
+    @Query("SELECT * FROM indicators WHERE symbol = :symbol ORDER BY sortOrder")
+    fun observe(symbol: String): Flow<List<IndicatorEntity>>
+
+    @Query("SELECT COUNT(*) FROM indicators WHERE symbol = :symbol")
+    suspend fun count(symbol: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(rows: List<IndicatorEntity>)
+
+    @Query("DELETE FROM indicators WHERE symbol = :symbol")
+    suspend fun deleteAll(symbol: String)
+}
+
 @Dao
 interface CandleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -126,12 +151,19 @@ interface WatchlistDao {
 }
 
 @Database(
-    entities = [CandleEntity::class, SymbolEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
-    version = 2,
+    entities = [
+        CandleEntity::class,
+        SymbolEntity::class,
+        WatchlistEntity::class,
+        WatchlistItemEntity::class,
+        IndicatorEntity::class,
+    ],
+    version = 3,
     exportSchema = false,
 )
 abstract class ChartDeskDatabase : RoomDatabase() {
     abstract fun candleDao(): CandleDao
     abstract fun symbolDao(): SymbolDao
     abstract fun watchlistDao(): WatchlistDao
+    abstract fun indicatorDao(): IndicatorDao
 }

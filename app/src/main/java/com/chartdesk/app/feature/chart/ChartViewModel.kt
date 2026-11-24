@@ -10,6 +10,9 @@ import com.chartdesk.app.chart.ChartEvent
 import com.chartdesk.app.data.Candle
 import com.chartdesk.app.data.ChartRequestBus
 import com.chartdesk.app.data.changePercent
+import com.chartdesk.app.data.indicators.IndicatorCatalog
+import com.chartdesk.app.data.indicators.IndicatorConfig
+import com.chartdesk.app.data.indicators.IndicatorRepository
 import com.chartdesk.app.data.pricePrecision
 import com.chartdesk.app.data.market.ConnectionState
 import com.chartdesk.app.data.market.MarketEvent
@@ -48,6 +51,7 @@ data class ChartUiState(
     val searchResults: List<SymbolInfo> = emptyList(),
     val isSearching: Boolean = false,
     val showSymbolPicker: Boolean = false,
+    val indicators: List<IndicatorConfig> = emptyList(),
 )
 
 @HiltViewModel
@@ -55,6 +59,7 @@ class ChartViewModel @Inject constructor(
     val controller: ChartController,
     private val repository: MarketRepository,
     private val settingsRepository: SettingsRepository,
+    private val indicatorRepository: IndicatorRepository,
     private val requestBus: ChartRequestBus,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -67,6 +72,7 @@ class ChartViewModel @Inject constructor(
     private var liveJob: Job? = null
     private var loadJob: Job? = null
     private var searchJob: Job? = null
+    private var indicatorsJob: Job? = null
     private var everConnected = false
 
     init {
@@ -93,6 +99,7 @@ class ChartViewModel @Inject constructor(
             val initial = settingsRepository.settings.first()
             applySettings(initial, initialLoad = true)
             sendInit(initial)
+            observeIndicators(_state.value.symbol)
             load()
             settingsRepository.settings.drop(1).collect { applySettings(it, initialLoad = false) }
         }
@@ -232,7 +239,50 @@ class ChartViewModel @Inject constructor(
         }
         _state.value = _state.value.copy(symbol = symbol, showSymbolPicker = false, candles = emptyList())
         controller.send(ChartCommand.SetSymbol(symbol))
+        observeIndicators(symbol)
         load()
+    }
+
+    private fun observeIndicators(symbol: String) {
+        indicatorsJob?.cancel()
+        indicatorsJob = viewModelScope.launch {
+            indicatorRepository.ensureDefault(symbol)
+            indicatorRepository.observe(symbol).collect { list ->
+                _state.value = _state.value.copy(indicators = list)
+                controller.send(
+                    ChartCommand.SetIndicators(
+                        list.map { ChartCommand.IndicatorDto(it.uid, it.type, it.params, it.visible) },
+                    ),
+                )
+            }
+        }
+    }
+
+    fun toggleIndicator(type: String, enabled: Boolean) {
+        val current = _state.value.indicators
+        val updated = if (enabled) {
+            if (current.any { it.type == type }) current
+            else current + IndicatorConfig(
+                uid = type,
+                type = type,
+                params = IndicatorCatalog.defaults(type),
+            )
+        } else {
+            current.filterNot { it.type == type }
+        }
+        persistIndicators(updated)
+    }
+
+    fun updateIndicatorParams(type: String, params: Map<String, Double>) {
+        persistIndicators(
+            _state.value.indicators.map { if (it.type == type) it.copy(params = params) else it },
+        )
+    }
+
+    private fun persistIndicators(list: List<IndicatorConfig>) {
+        val symbol = _state.value.symbol
+        _state.value = _state.value.copy(indicators = list)
+        viewModelScope.launch { indicatorRepository.replace(symbol, list) }
     }
 
     fun setTimeframe(tf: String) {
@@ -275,6 +325,7 @@ class ChartViewModel @Inject constructor(
         liveJob?.cancel()
         loadJob?.cancel()
         searchJob?.cancel()
+        indicatorsJob?.cancel()
         super.onCleared()
     }
 }

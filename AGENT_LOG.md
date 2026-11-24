@@ -4,6 +4,26 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 6)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 6 — indicators.
+- **What changed:** new `assets/chart/indicators.js` with 12 indicators (MA/EMA/WMA/Bollinger/VWAP/Ichimoku/
+  SuperTrend/Volume/RSI/MACD/ATR/Stochastic), all computed in JS from the raw series; overlay indicators draw on the
+  price chart, oscillators get their own synced panes (time-scale linking both ways, time axis moves to the bottom
+  pane); per-indicator parameter editing; per-symbol persistence in Room v3 (`indicators` table + migration);
+  indicator legend; theme propagation to panes; volume indicator toggles the built-in histogram.
+- **Touched files:** `assets/chart/{index.html,tokens.css,app.js,indicators.js}`, `data/indicators/*`,
+  `data/db/ChartDeskDatabase.kt`, `di/DatabaseModule.kt`, `chart/ChartCommand.kt`, `feature/chart/ChartViewModel.kt`,
+  `ui/chart/IndicatorsSheet.kt`, `ui/screens/ChartScreen.kt`, `js-tests/indicators.test.cjs`,
+  `app/src/test/.../IndicatorCatalogTest.kt`.
+- **Verification:** 24/24 JS tests (12 indicator math suites + headless browser adding MA/RSI/MACD → 2 panes, removing
+  them → 0 panes); `./gradlew assembleDebug testDebugUnitTest` green.
+- **Commit:** `__HASH6__`.
+- **Pending:** feature 7 (drawing tools).
+- **Notes:** Kotlin `IndicatorCatalog` must stay in sync with `registry` in `indicators.js` (ids, params, defaults).
+  Panes are separate lightweight-charts instances; only the bottom pane shows the time axis.
+
 ## 2026-11-24 — Session 1 (feature 5)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
