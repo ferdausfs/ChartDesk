@@ -13,8 +13,6 @@
 
   var els = {
     chart: document.getElementById('chart'),
-    panes: document.getElementById('panes'),
-    indicatorLegend: document.getElementById('indicator-legend'),
     skeleton: document.getElementById('skeleton'),
     toast: document.getElementById('error-toast'),
     sym: document.getElementById('legend-symbol'),
@@ -42,12 +40,6 @@
     cb: false,
     scaleMode: 'normal',
     watermark: 'ChartDesk',
-    indicators: [],
-    overlays: {},
-    panes: {},
-    syncing: false,
-    options: { grid: true, crosshair: true, watermark: true },
-    replay: { active: false, playing: false, index: 0, speed: 1, timer: null, position: null },
   };
 
   var hooks = {
@@ -174,12 +166,6 @@
     chart.timeScale().subscribeVisibleLogicalRangeChange(function (range) {
       if (!range) return;
       post('visibleRange', { from: range.from, to: range.to });
-      if (state.syncing) return;
-      state.syncing = true;
-      Object.keys(state.panes).forEach(function (key) {
-        state.panes[key].chart.timeScale().setVisibleLogicalRange(range);
-      });
-      state.syncing = false;
     });
 
     state.chart = chart;
@@ -242,15 +228,9 @@
     });
   }
 
-  function visibleRaw() {
-    if (state.replay.active) return state.raw.slice(0, state.replay.index + 1);
-    return state.raw;
-  }
-
   function displayedCandles() {
-    var base = state.type === 'heikin' ? lib.heikinAshi(state.raw) : state.raw;
-    if (state.replay.active) return base.slice(0, state.replay.index + 1);
-    return base;
+    if (state.type === 'heikin') return lib.heikinAshi(state.raw);
+    return state.raw;
   }
 
   function toSeriesData(type, candles) {
@@ -273,7 +253,7 @@
     if (!state.mainSeries) return;
     var shown = displayedCandles();
     state.mainSeries.setData(toSeriesData(state.type, shown));
-    if (state.volumeSeries) state.volumeSeries.setData(volumeData(visibleRaw()));
+    if (state.volumeSeries) state.volumeSeries.setData(volumeData(state.raw));
     if (state.raw.length) {
       var last = shown[shown.length - 1];
       setLastPriceLine(last.close);
@@ -308,9 +288,8 @@
     var p = palette();
     els.sym.textContent = state.symbol;
     els.tf.textContent = state.timeframe;
-    var visible = visibleRaw();
-    var last = visible.length ? visible[visible.length - 1] : null;
-    var shown = state.type === 'heikin' && bar ? bar : (bar || (state.type === 'heikin' && visible.length ? lib.heikinAshi(visible).pop() : last));
+    var last = state.raw.length ? state.raw[state.raw.length - 1] : null;
+    var shown = state.type === 'heikin' && bar ? bar : (bar || (state.type === 'heikin' && state.raw.length ? lib.heikinAshi(state.raw).pop() : last));
     if (!shown) {
       ['o', 'h', 'l', 'c'].forEach(function (k) { els[k].textContent = '—'; });
       els.chg.textContent = '—';
@@ -335,7 +314,6 @@
     if (state.lastPriceLine) state.lastPriceLine = null;
     addMainSeries(type);
     state.raw = data;
-    if (window.ChartDeskDrawings) window.ChartDeskDrawings.setSeries(state.mainSeries);
     applyData(false);
     for (var i = 0; i < hooks.afterSeries.length; i++) {
       try { hooks.afterSeries[i](); } catch (e) { console.warn(e); }
@@ -367,7 +345,6 @@
     });
     if (state.volumeSeries) state.volumeSeries.setData(volumeData(state.raw));
     recreateSeries(state.type === 'heikin' ? 'heikin' : state.type);
-    applyIndicatorTheme();
     post('themeApplied', { dark: !!dark, colorBlind: !!colorBlind });
   }
 
@@ -387,7 +364,6 @@
   }
 
   function setCandles(payload) {
-    if (state.replay.active) replayStop(true);
     var rows = payload.candles || [];
     var precision = payload.precision;
     state.raw = rows.map(function (r) {
@@ -411,7 +387,6 @@
   }
 
   function updateCandle(payload) {
-    if (state.replay.active) return;
     var row = payload.candle;
     if (!row) return;
     var candle = Array.isArray(row)
@@ -433,344 +408,6 @@
     for (var i = 0; i < hooks.afterData.length; i++) {
       try { hooks.afterData[i](displayedCandles()); } catch (e) { console.warn(e); }
     }
-  }
-
-  // ---- bar replay ---------------------------------------------------------
-  function replayEngine() {
-    return window.ChartDeskReplay;
-  }
-
-  function postReplay() {
-    var engine = replayEngine();
-    var visible = visibleRaw();
-    var price = visible.length ? visible[visible.length - 1].close : 0;
-    var summary = engine ? engine.summary(state.replay.position, price) : { side: null, entry: 0, pnl: 0, pnlPercent: 0 };
-    post('replayState', {
-      active: state.replay.active,
-      playing: state.replay.playing,
-      index: state.replay.index,
-      total: state.raw.length,
-      speed: state.replay.speed,
-      price: price,
-      side: summary.side,
-      entry: summary.entry,
-      pnl: summary.pnl,
-      pnlPercent: summary.pnlPercent,
-    });
-  }
-
-  function replayApply(fit) {
-    applyData(!!fit);
-    postReplay();
-  }
-
-  function replayStart(index) {
-    var engine = replayEngine();
-    if (!engine || !state.raw.length) return;
-    clearInterval(state.replay.timer);
-    state.replay.active = true;
-    state.replay.playing = false;
-    state.replay.index = engine.clampIndex(index, state.raw.length);
-    state.replay.position = null;
-    replayApply(true);
-  }
-
-  function replayPlay(speed) {
-    var engine = replayEngine();
-    if (!engine || !state.replay.active) return;
-    if (speed) state.replay.speed = speed;
-    state.replay.playing = true;
-    clearInterval(state.replay.timer);
-    state.replay.timer = setInterval(function () { replayStep(1); }, engine.intervalMs(state.replay.speed));
-    postReplay();
-  }
-
-  function replayPause() {
-    state.replay.playing = false;
-    clearInterval(state.replay.timer);
-    state.replay.timer = null;
-    postReplay();
-  }
-
-  function replayStep(delta) {
-    var engine = replayEngine();
-    if (!engine || !state.replay.active) return;
-    var next = engine.step(state.replay.index, state.raw.length, delta || 1);
-    if (next === state.replay.index && (delta || 1) > 0) {
-      replayPause();
-      return;
-    }
-    state.replay.index = next;
-    replayApply(false);
-    if (next >= state.raw.length - 1 && state.replay.playing) replayPause();
-  }
-
-  function replaySeek(index) {
-    var engine = replayEngine();
-    if (!engine || !state.replay.active) return;
-    state.replay.index = engine.clampIndex(index, state.raw.length);
-    replayApply(false);
-  }
-
-  function replayStop(silent) {
-    clearInterval(state.replay.timer);
-    state.replay.timer = null;
-    state.replay.active = false;
-    state.replay.playing = false;
-    state.replay.position = null;
-    applyData(false);
-    if (!silent) postReplay();
-  }
-
-  function replayTrade(action) {
-    var engine = replayEngine();
-    if (!engine || !state.replay.active) return;
-    var visible = visibleRaw();
-    if (!visible.length) return;
-    state.replay.position = engine.trade(state.replay.position, action, visible[visible.length - 1].close);
-    postReplay();
-  }
-
-  function replaySetSpeed(speed) {
-    if (!state.replay.active) return;
-    state.replay.speed = speed;
-    if (state.replay.playing) replayPlay(speed);
-    else postReplay();
-  }
-
-  // ---- indicators ---------------------------------------------------------
-  function indicatorLib() {
-    return window.ChartDeskIndicators;
-  }
-
-  function indicatorLabel(cfg) {
-    var lib = indicatorLib();
-    var spec = lib && lib.registry[cfg.type];
-    var name = spec ? spec.name : cfg.type.toUpperCase();
-    var params = cfg.params || {};
-    var keys = Object.keys(params);
-    if (!keys.length) return name;
-    return name + ' ' + keys.map(function (k) { return params[k]; }).join('/');
-  }
-
-  function removeOverlay(uid) {
-    var store = state.overlays[uid];
-    if (!store) return;
-    Object.keys(store).forEach(function (key) {
-      try { state.chart.removeSeries(store[key]); } catch (e) { console.warn(e); }
-    });
-    delete state.overlays[uid];
-  }
-
-  function removePane(uid) {
-    var pane = state.panes[uid];
-    if (!pane) return;
-    try { pane.chart.remove(); } catch (e) { console.warn(e); }
-    if (pane.div && pane.div.parentNode) pane.div.parentNode.removeChild(pane.div);
-    delete state.panes[uid];
-    updateTimeAxis();
-  }
-
-  function updateTimeAxis() {
-    var keys = Object.keys(state.panes);
-    state.chart.applyOptions({ timeScale: { visible: keys.length === 0 } });
-    keys.forEach(function (key, index) {
-      state.panes[key].chart.applyOptions({ timeScale: { visible: index === keys.length - 1 } });
-    });
-  }
-
-  function paneOptions() {
-    var p = palette();
-    return {
-      autoSize: true,
-      layout: { background: { type: 'solid', color: p.bg }, textColor: p.dim, fontSize: 9, fontFamily: p.mono, attributionLogo: false },
-      grid: { vertLines: { color: p.grid }, horzLines: { color: p.grid } },
-      crosshair: {
-        mode: state.options.crosshair ? LWC.CrosshairMode.Normal : LWC.CrosshairMode.Hidden,
-        vertLine: { color: p.crosshair, width: 1, style: LWC.LineStyle.Dashed, labelBackgroundColor: p.surfaceAlt },
-        horzLine: { color: p.crosshair, width: 1, style: LWC.LineStyle.Dashed, labelBackgroundColor: p.surfaceAlt },
-      },
-      rightPriceScale: { borderColor: p.border, scaleMargins: { top: 0.18, bottom: 0.08 }, entireTextOnly: true },
-      timeScale: { visible: false, borderColor: p.border, rightOffset: 4 },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { axisPressedMouseMove: false, mouseWheel: true, pinch: true },
-      kineticScroll: { touch: true, mouse: false },
-      localization: { priceFormatter: function (value) { return lib.formatPrice(value, Math.min(state.precision + 1, 6)); } },
-    };
-  }
-
-  function createPane(cfg) {
-    var div = document.createElement('div');
-    div.className = 'pane';
-    var title = document.createElement('div');
-    title.className = 'pane-title';
-    div.appendChild(title);
-    els.panes.appendChild(div);
-    var chart = LWC.createChart(div, paneOptions());
-    var pane = { div: div, title: title, chart: chart, series: {}, hlineCount: 0 };
-    state.panes[cfg.uid] = pane;
-    chart.timeScale().subscribeVisibleLogicalRangeChange(function (range) {
-      if (!range || state.syncing) return;
-      state.syncing = true;
-      state.chart.timeScale().setVisibleLogicalRange(range);
-      Object.keys(state.panes).forEach(function (key) {
-        if (key !== cfg.uid) state.panes[key].chart.timeScale().setVisibleLogicalRange(range);
-      });
-      state.syncing = false;
-    });
-    var mainRange = state.chart.timeScale().getVisibleLogicalRange();
-    if (mainRange) chart.timeScale().setVisibleLogicalRange(mainRange);
-    updateTimeAxis();
-    return pane;
-  }
-
-  function seriesForPane(pane, plot, histogram) {
-    var key = histogram ? '__hist' : plot.key;
-    var existing = pane.series[key];
-    if (existing) {
-      if (plot) existing.applyOptions({ color: plot.color });
-      return existing;
-    }
-    var options = {
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-      priceFormat: { type: 'price', precision: Math.min(state.precision + 1, 6), minMove: Math.pow(10, -Math.min(state.precision + 1, 6)) },
-    };
-    if (histogram) {
-      options.color = plot.color;
-      options.base = 0;
-    } else {
-      options.color = plot.color;
-      options.lineWidth = 1;
-    }
-    var series = histogram ? pane.chart.addHistogramSeries(options) : pane.chart.addLineSeries(options);
-    pane.series[key] = series;
-    return series;
-  }
-
-  function updateOverlay(cfg, result) {
-    var store = state.overlays[cfg.uid] || (state.overlays[cfg.uid] = {});
-    result.plots.forEach(function (plot) {
-      var series = store[plot.key];
-      if (!series) {
-        series = state.chart.addLineSeries({
-          color: plot.color,
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-          priceFormat: { type: 'price', precision: state.precision, minMove: Math.pow(10, -state.precision) },
-        });
-        store[plot.key] = series;
-      } else {
-        series.applyOptions({ color: plot.color });
-      }
-      series.setData(plot.data);
-    });
-  }
-
-  function updatePane(cfg, result) {
-    var pane = state.panes[cfg.uid] || createPane(cfg);
-    pane.title.textContent = indicatorLabel(cfg);
-    result.plots.forEach(function (plot) {
-      seriesForPane(pane, plot, false).setData(plot.data);
-    });
-    if (result.histogram) {
-      var hist = seriesForPane(pane, { key: 'hist', color: palette().dim }, true);
-      hist.setData(result.histogram);
-    }
-    if (result.hlines && result.hlineCount !== pane.hlineCount) {
-      // Recreate reference lines only when the indicator set changes.
-      pane.hlineCount = result.hlineCount;
-    }
-    if (result.hlines) {
-      if (!pane.hlinesDrawn) {
-        var first = pane.series[result.plots[0].key];
-        if (first) {
-          result.hlines.forEach(function (line) {
-            first.createPriceLine({ price: line.price, color: line.color, lineWidth: 1, lineStyle: LWC.LineStyle.Dashed, axisLabelVisible: false, title: '' });
-          });
-          pane.hlinesDrawn = true;
-        }
-      }
-    }
-  }
-
-  function computeAll(candles) {
-    var libInd = indicatorLib();
-    if (!libInd || !state.chart) return;
-    var data = candles || state.raw;
-    var active = {};
-    state.indicators.forEach(function (cfg) {
-      if (!cfg.visible) return;
-      active[cfg.type] = true;
-      try {
-        if (cfg.type === 'volume') return;
-        var result = libInd.compute(cfg.type, data, cfg.params || {});
-        var spec = libInd.registry[cfg.type];
-        if (!spec) return;
-        if (spec.pane === 'overlay') updateOverlay(cfg, result);
-        else updatePane(cfg, result);
-      } catch (e) {
-        console.warn('indicator failed: ' + cfg.type, e);
-        post('error', { message: 'Indicator ' + cfg.type + ' failed: ' + e.message });
-      }
-    });
-    if (state.volumeSeries) {
-      state.volumeSeries.applyOptions({ visible: !!active.volume });
-    }
-  }
-
-  function setIndicators(list) {
-    var incoming = (list || []).filter(function (item) { return item && item.type; }).map(function (item) {
-      return {
-        uid: item.uid || item.type,
-        type: item.type,
-        params: item.params || {},
-        visible: item.visible !== false,
-      };
-    });
-    state.indicators = incoming;
-    var keep = {};
-    incoming.forEach(function (i) { keep[i.uid] = true; });
-    Object.keys(state.overlays).forEach(function (uid) { if (!keep[uid]) removeOverlay(uid); });
-    Object.keys(state.panes).forEach(function (uid) { if (!keep[uid]) removePane(uid); });
-    computeAll(state.raw);
-    renderIndicatorLegend();
-    updateTimeAxis();
-  }
-
-  function renderIndicatorLegend() {
-    if (!els.indicatorLegend) return;
-    els.indicatorLegend.innerHTML = '';
-    var lib = indicatorLib();
-    state.indicators.forEach(function (cfg) {
-      if (!cfg.visible) return;
-      var spec = lib && lib.registry[cfg.type];
-      var color = cfg.type === 'volume' ? palette().dim : (spec && spec.pane === 'separate' ? palette().accent : '#4C9BFF');
-      var item = document.createElement('span');
-      item.className = 'item';
-      var dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = color;
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(indicatorLabel(cfg)));
-      els.indicatorLegend.appendChild(item);
-    });
-  }
-
-  function applyIndicatorTheme() {
-    Object.keys(state.panes).forEach(function (key) {
-      var pane = state.panes[key];
-      var p = palette();
-      pane.chart.applyOptions({
-        layout: { background: { type: 'solid', color: p.bg }, textColor: p.dim },
-        grid: { vertLines: { color: p.grid }, horzLines: { color: p.grid } },
-        rightPriceScale: { borderColor: p.border },
-        timeScale: { borderColor: p.border },
-      });
-    });
   }
 
   function setOptions(payload) {
@@ -826,42 +463,6 @@
         case 'setWatermark': setWatermark(payload.text); break;
         case 'setPrecision': state.precision = payload.precision; applyData(false); break;
         case 'setOptions': setOptions(payload); break;
-        case 'setIndicators': setIndicators(payload.list); break;
-        case 'setDrawings':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setDrawings(payload.list || []);
-          break;
-        case 'setDrawTool':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setTool(payload.tool);
-          break;
-        case 'setDrawMode':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setMode(payload.mode);
-          break;
-        case 'undoDrawing':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.undo();
-          break;
-        case 'redoDrawing':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.redo();
-          break;
-        case 'deleteDrawing':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.deleteSelected();
-          break;
-        case 'lockDrawing':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setLocked(!!payload.locked);
-          break;
-        case 'clearDrawings':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.clear();
-          break;
-        case 'updateDrawingText':
-          if (window.ChartDeskDrawings) window.ChartDeskDrawings.updateText(payload.id, payload.text);
-          break;
-        case 'replayStart': replayStart(payload.index || 0); break;
-        case 'replayPlay': replayPlay(payload.speed); break;
-        case 'replayPause': replayPause(); break;
-        case 'replayStep': replayStep(payload.delta || 1); break;
-        case 'replaySeek': replaySeek(payload.index || 0); break;
-        case 'replayStop': replayStop(false); break;
-        case 'replaySpeed': replaySetSpeed(payload.speed || 1); break;
-        case 'replayTrade': replayTrade(payload.action); break;
         case 'showError': toast(payload.message || 'Chart error'); break;
         default:
           if (window.ChartDeskExt && typeof window.ChartDeskExt.handle === 'function') {
@@ -958,17 +559,6 @@
     addMainSeries('candle');
     addVolumeSeries();
     renderLegend(null);
-    hooks.afterData.push(function (candles) { computeAll(candles); });
-    hooks.afterSeries.push(function () { computeAll(state.raw); });
-    if (window.ChartDeskDrawings) {
-      window.ChartDeskDrawings.init({
-        chart: state.chart,
-        mainSeries: state.mainSeries,
-        container: els.chart,
-        post: post,
-        palette: palette,
-      });
-    }
     window.ChartDesk = {
       handle: handle,
       state: state,

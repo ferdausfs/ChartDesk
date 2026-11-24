@@ -2,7 +2,6 @@ package com.chartdesk.app.chart
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -36,28 +35,6 @@ object ChartEventParser {
                         volume = dbl("volume"),
                     )
                 }
-                "drawingsChanged" -> ChartEvent.DrawingsChanged(
-                    com.chartdesk.app.data.drawings.DrawingCodec.parseBridgeList(json, payload),
-                )
-                "drawingSelected" -> ChartEvent.DrawingSelected(
-                    id = payload["id"]?.jsonPrimitive?.contentOrNull,
-                    locked = payload["locked"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                )
-                "textRequest" -> ChartEvent.TextRequest(str("id") ?: "")
-                "measure" -> ChartEvent.Measure(dbl("from"), dbl("to"), dbl("pct"))
-                "modeChanged" -> ChartEvent.ModeChanged(str("mode") ?: "none")
-                "replayState" -> ChartEvent.ReplayState(
-                    active = payload["active"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    playing = payload["playing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    index = payload["index"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                    total = payload["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                    speed = dbl("speed").takeIf { it > 0 } ?: 1.0,
-                    price = dbl("price"),
-                    side = str("side")?.takeIf { it.isNotEmpty() && it != "null" },
-                    entry = dbl("entry"),
-                    pnl = dbl("pnl"),
-                    pnlPercent = dbl("pnlPercent"),
-                )
                 "haptic" -> ChartEvent.Haptic(str("kind") ?: "tap")
                 "error" -> ChartEvent.ChartError(str("message") ?: "chart error", str("command"))
                 "ack" -> ChartEvent.Ack(str("id") ?: "")

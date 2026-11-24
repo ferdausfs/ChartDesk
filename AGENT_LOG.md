@@ -4,6 +4,28 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 9)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 9 — Pine v6 subset.
+- **What changed:** `assets/chart/pine.js` (indentation-aware lexer, Pratt parser, per-bar evaluator) supporting
+  `indicator`, `plot`, `plotshape`, `hline`, `bgcolor`, `input.*`, `ta.*` (sma/ema/rsi/atr/highest/lowest/change/
+  crossover/crossunder), `math.*`, `request.security` (chart-series fallback + warning), `var`, `:=`, `if/else`,
+  `for`, arrays and colours; readable line/column errors; overlay plotting on the chart with auto re-run on
+  symbol/timeframe changes; Room v5 `scripts` table + migration; sample library; editor with Pine syntax
+  highlighting, save/rename/delete, run and error panel; `docs/PINE-SUPPORT.md` lists the exact supported and
+  unsupported surface.
+- **Touched files:** `assets/chart/{pine.js,app.js,index.html}`, `data/scripts/*`, `data/db/ChartDeskDatabase.kt`,
+  `di/DatabaseModule.kt`, `chart/{ChartCommand,ChartEvent,ChartProtocol}.kt`, `feature/scripts/*`,
+  `ui/scripts/PineHighlighter.kt`, `ui/screens/{ScriptsScreen.kt,PlaceholderScreens.kt}`, `docs/PINE-SUPPORT.md`,
+  `js-tests/{pine.test.cjs,browser.test.cjs,package.json}`.
+- **Verification:** 51/51 JS tests (15 Pine suites + browser run/clear); `./gradlew assembleDebug testDebugUnitTest`
+  green.
+- **Commit:** `__HASH9__`.
+- **Pending:** feature 10 (alerts).
+- **Notes:** named arguments (`title=`, `color=`) are supported; `ta.*` accepts builtin/user series but nested
+  `ta.sma(...)` inside `ta.crossover(...)` only sees the current value — documented limitation.
+
 ## 2026-11-24 — Session 1 (feature 8)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -18,7 +40,7 @@ Newest entries first. Never delete an entry.
   `data/Candle.kt` (Locale.US formatting), `js-tests/{replay.test.cjs,browser.test.cjs,package.json}`.
 - **Verification:** 36/36 JS tests (replay maths + headless browser starting at bar 20, stepping, paper-buy, stop);
   `./gradlew assembleDebug testDebugUnitTest` green.
-- **Commit:** `__HASH8__`.
+- **Commit:** `1c35cb2`.
 - **Pending:** feature 9 (Pine subset).
 - **Notes:** paper trades are intentionally local to the replay session (not persisted) and reset when replay stops.
 

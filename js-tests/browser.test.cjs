@@ -160,6 +160,19 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   });
   await page.waitForFunction('window.ChartDesk.state.replay.active === false');
 
+  // Pine subset runs on the live chart and adds an overlay series.
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({
+      type: 'runPine',
+      payload: { code: 'indicator("test")\nplot(ta.sma(close, 5), title="ma", color=color.green)' },
+    }));
+  });
+  await page.waitForFunction('window.ChartDesk.state.pine.series.length === 1');
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'clearPine' }));
+  });
+  await page.waitForFunction('window.ChartDesk.state.pine.series.length === 0');
+
   // Unknown commands must be ignored, not thrown.
   await page.evaluate(() => {
     window.ChartDesk.handle(JSON.stringify({ type: 'no-such-command', payload: {} }));

@@ -9,7 +9,6 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import com.chartdesk.app.data.Candle
-import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "candles", primaryKeys = ["symbol", "timeframe", "time"])
 data class CandleEntity(
@@ -47,69 +46,6 @@ data class SymbolEntity(
     val updatedAt: Long,
 )
 
-@Entity(tableName = "watchlists")
-data class WatchlistEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val sortOrder: Int,
-    val createdAt: Long,
-)
-
-@Entity(tableName = "watchlist_items", primaryKeys = ["listId", "symbol"])
-data class WatchlistItemEntity(
-    val listId: String,
-    val symbol: String,
-    val sortOrder: Int,
-)
-
-@Entity(tableName = "drawings", primaryKeys = ["symbol", "id"])
-data class DrawingEntity(
-    val symbol: String,
-    val id: String,
-    val type: String,
-    val payloadJson: String,
-    val locked: Boolean,
-    val sortOrder: Int,
-    val updatedAt: Long,
-)
-
-@Dao
-interface DrawingDao {
-    @Query("SELECT * FROM drawings WHERE symbol = :symbol ORDER BY sortOrder")
-    fun observe(symbol: String): Flow<List<DrawingEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(rows: List<DrawingEntity>)
-
-    @Query("DELETE FROM drawings WHERE symbol = :symbol")
-    suspend fun deleteAll(symbol: String)
-}
-
-@Entity(tableName = "indicators", primaryKeys = ["symbol", "uid"])
-data class IndicatorEntity(
-    val symbol: String,
-    val uid: String,
-    val type: String,
-    val paramsJson: String,
-    val visible: Boolean,
-    val sortOrder: Int,
-)
-
-@Dao
-interface IndicatorDao {
-    @Query("SELECT * FROM indicators WHERE symbol = :symbol ORDER BY sortOrder")
-    fun observe(symbol: String): Flow<List<IndicatorEntity>>
-
-    @Query("SELECT COUNT(*) FROM indicators WHERE symbol = :symbol")
-    suspend fun count(symbol: String): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(rows: List<IndicatorEntity>)
-
-    @Query("DELETE FROM indicators WHERE symbol = :symbol")
-    suspend fun deleteAll(symbol: String)
-}
-
 @Dao
 interface CandleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -134,61 +70,8 @@ interface SymbolDao {
     suspend fun search(q: String): List<SymbolEntity>
 }
 
-@Dao
-interface WatchlistDao {
-    @Query("SELECT * FROM watchlists ORDER BY sortOrder, createdAt")
-    fun lists(): Flow<List<WatchlistEntity>>
-
-    @Query("SELECT * FROM watchlists ORDER BY sortOrder, createdAt")
-    suspend fun listsOnce(): List<WatchlistEntity>
-
-    @Query("SELECT * FROM watchlist_items WHERE listId = :listId ORDER BY sortOrder")
-    fun items(listId: String): Flow<List<WatchlistItemEntity>>
-
-    @Query("SELECT * FROM watchlist_items WHERE listId = :listId ORDER BY sortOrder")
-    suspend fun itemsOnce(listId: String): List<WatchlistItemEntity>
-
-    @Query("SELECT COUNT(*) FROM watchlists")
-    suspend fun countLists(): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertList(list: WatchlistEntity)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertItems(items: List<WatchlistItemEntity>)
-
-    @Query("DELETE FROM watchlist_items WHERE listId = :listId AND symbol = :symbol")
-    suspend fun deleteItem(listId: String, symbol: String)
-
-    @Query("DELETE FROM watchlist_items WHERE listId = :listId")
-    suspend fun deleteItems(listId: String)
-
-    @Query("DELETE FROM watchlists WHERE id = :listId")
-    suspend fun deleteList(listId: String)
-
-    @Query("UPDATE watchlist_items SET sortOrder = :order WHERE listId = :listId AND symbol = :symbol")
-    suspend fun setOrder(listId: String, symbol: String, order: Int)
-
-    @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM watchlist_items WHERE listId = :listId")
-    suspend fun maxOrder(listId: String): Int
-}
-
-@Database(
-    entities = [
-        CandleEntity::class,
-        SymbolEntity::class,
-        WatchlistEntity::class,
-        WatchlistItemEntity::class,
-        IndicatorEntity::class,
-        DrawingEntity::class,
-    ],
-    version = 4,
-    exportSchema = false,
-)
+@Database(entities = [CandleEntity::class, SymbolEntity::class], version = 1, exportSchema = false)
 abstract class ChartDeskDatabase : RoomDatabase() {
     abstract fun candleDao(): CandleDao
     abstract fun symbolDao(): SymbolDao
-    abstract fun watchlistDao(): WatchlistDao
-    abstract fun indicatorDao(): IndicatorDao
-    abstract fun drawingDao(): DrawingDao
 }

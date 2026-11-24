@@ -32,6 +32,9 @@ private fun Placeholder(title: String, body: String) {
 }
 
 @Composable
+fun WatchlistScreen() = Placeholder("Watchlist", "Live lists arrive in feature 5.")
+
+@Composable
 fun ScriptsScreen() = Placeholder("Scripts", "Pine subset editor arrives in feature 9.")
 
 @Composable
