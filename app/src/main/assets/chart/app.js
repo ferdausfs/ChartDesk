@@ -109,8 +109,12 @@
 
   function createChart() {
     var p = palette();
+    var initialWidth = els.chart.clientWidth || window.innerWidth || 360;
+    var initialHeight = els.chart.clientHeight || window.innerHeight || 480;
     var chart = LWC.createChart(els.chart, {
-      autoSize: true,
+      width: initialWidth,
+      height: initialHeight,
+      autoSize: false,
       layout: {
         background: { type: 'solid', color: p.bg },
         textColor: p.dim,
@@ -185,6 +189,14 @@
       });
       state.syncing = false;
     });
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        var w = els.chart.clientWidth;
+        var h = els.chart.clientHeight;
+        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
+      }).observe(els.chart);
+    }
 
     state.chart = chart;
     return chart;
@@ -1111,6 +1123,17 @@
       post: post,
     };
     post('ready', { version: 1, engine: 'lightweight-charts', types: ['candle', 'heikin', 'line', 'area', 'bar'] });
+    setTimeout(function () {
+      post('health', {
+        w: window.innerWidth,
+        h: window.innerHeight,
+        cw: els.chart.clientWidth,
+        ch: els.chart.clientHeight,
+        canvases: document.querySelectorAll('canvas').length,
+        raw: state.raw.length,
+        skeleton: document.getElementById('skeleton').className,
+      });
+    }, 1500);
     setTimeout(function () { els.skeleton.classList.add('hidden'); }, 600);
   } catch (e) {
     console.error(e);

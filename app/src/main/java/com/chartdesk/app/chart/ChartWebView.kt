@@ -30,7 +30,7 @@ fun ChartWebView(controller: ChartController, modifier: Modifier = Modifier) {
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
-                setBackgroundColor(Color.TRANSPARENT)
+                setBackgroundColor(Color.rgb(11, 15, 20))
                 overScrollMode = WebView.OVER_SCROLL_NEVER
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
@@ -52,6 +52,7 @@ fun ChartWebView(controller: ChartController, modifier: Modifier = Modifier) {
                 addJavascriptInterface(ChartBridge { raw -> controller.onJsMessage(raw) }, "AndroidBridge")
                 controller.attach(this)
                 loadUrl(CHART_URL)
+                postDelayed({ invalidate() }, 400)
             }
         },
         onRelease = { view ->

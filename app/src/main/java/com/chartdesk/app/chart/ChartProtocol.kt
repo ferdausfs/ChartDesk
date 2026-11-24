@@ -79,6 +79,11 @@ object ChartEventParser {
                     )
                 }
                 "log" -> ChartEvent.Log(str("message") ?: "")
+                "health" -> ChartEvent.Log(
+                    "health " + payload.entries.joinToString(" ") { (k, v) ->
+                        k + "=" + (v.jsonPrimitive.contentOrNull ?: "?")
+                    },
+                )
                 "haptic" -> ChartEvent.Haptic(str("kind") ?: "tap")
                 "error" -> ChartEvent.ChartError(str("message") ?: "chart error", str("command"))
                 "ack" -> ChartEvent.Ack(str("id") ?: "")
