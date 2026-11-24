@@ -16,3 +16,4 @@ backend/.wrangler/
 backend/dist/
 *.log
 opencode-export/
+.kotlin/

@@ -1,10 +1,44 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 const puppeteer = require('puppeteer-core');
 
-const PAGE = path.resolve(__dirname, '..', 'app', 'src', 'main', 'assets', 'chart', 'index.html');
+const CHART_DIR = path.resolve(__dirname, '..', 'app', 'src', 'main', 'assets', 'chart');
+
+const MIME = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.txt': 'text/plain',
+};
+
+function startServer() {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+      if (urlPath === '/favicon.ico') {
+        res.writeHead(204).end();
+        return;
+      }
+      const file = path.join(CHART_DIR, urlPath === '/' ? 'index.html' : urlPath);
+      if (!file.startsWith(CHART_DIR)) {
+        res.writeHead(403).end();
+        return;
+      }
+      fs.readFile(file, (err, data) => {
+        if (err) {
+          res.writeHead(404).end();
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+        res.end(data);
+      });
+    });
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+  });
+}
 
 function chromePath() {
   const candidates = [
@@ -36,6 +70,9 @@ function candleSeries(count) {
 }
 
 test('chart page boots and applies bridge commands without errors', async (t) => {
+  const { server, port } = await startServer();
+  t.after(() => server.close());
+
   const browser = await puppeteer.launch({
     executablePath: chromePath(),
     headless: true,
@@ -43,7 +80,6 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
       '--no-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--allow-file-access-from-files',
       '--force-device-scale-factor=1',
     ],
     defaultViewport: { width: 420, height: 720, deviceScaleFactor: 1 },
@@ -59,7 +95,7 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   });
   page.on('requestfailed', (req) => errors.push('requestfailed: ' + req.url() + ' ' + (req.failure() && req.failure().errorText)));
 
-  await page.goto('file://' + PAGE, { waitUntil: 'load' });
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   try {
     await page.waitForFunction('window.ChartDesk && window.ChartDesk.state && window.ChartDesk.state.chart');
   } catch (e) {
