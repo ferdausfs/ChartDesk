@@ -8,6 +8,7 @@ import com.chartdesk.app.chart.ChartCommand
 import com.chartdesk.app.chart.ChartController
 import com.chartdesk.app.chart.ChartEvent
 import com.chartdesk.app.data.Candle
+import com.chartdesk.app.data.ChartRequestBus
 import com.chartdesk.app.data.changePercent
 import com.chartdesk.app.data.pricePrecision
 import com.chartdesk.app.data.market.ConnectionState
@@ -54,6 +55,7 @@ class ChartViewModel @Inject constructor(
     val controller: ChartController,
     private val repository: MarketRepository,
     private val settingsRepository: SettingsRepository,
+    private val requestBus: ChartRequestBus,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -76,6 +78,14 @@ class ChartViewModel @Inject constructor(
                     )
                     is ChartEvent.ChartError -> _state.value = _state.value.copy(error = event.message)
                     else -> Unit
+                }
+            }
+        }
+        viewModelScope.launch {
+            requestBus.symbol.collect { symbol ->
+                if (symbol != null) {
+                    selectSymbol(symbol)
+                    requestBus.consume()
                 }
             }
         }

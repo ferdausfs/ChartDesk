@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import com.chartdesk.app.data.Candle
+import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "candles", primaryKeys = ["symbol", "timeframe", "time"])
 data class CandleEntity(
@@ -46,6 +47,21 @@ data class SymbolEntity(
     val updatedAt: Long,
 )
 
+@Entity(tableName = "watchlists")
+data class WatchlistEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val sortOrder: Int,
+    val createdAt: Long,
+)
+
+@Entity(tableName = "watchlist_items", primaryKeys = ["listId", "symbol"])
+data class WatchlistItemEntity(
+    val listId: String,
+    val symbol: String,
+    val sortOrder: Int,
+)
+
 @Dao
 interface CandleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -70,8 +86,52 @@ interface SymbolDao {
     suspend fun search(q: String): List<SymbolEntity>
 }
 
-@Database(entities = [CandleEntity::class, SymbolEntity::class], version = 1, exportSchema = false)
+@Dao
+interface WatchlistDao {
+    @Query("SELECT * FROM watchlists ORDER BY sortOrder, createdAt")
+    fun lists(): Flow<List<WatchlistEntity>>
+
+    @Query("SELECT * FROM watchlists ORDER BY sortOrder, createdAt")
+    suspend fun listsOnce(): List<WatchlistEntity>
+
+    @Query("SELECT * FROM watchlist_items WHERE listId = :listId ORDER BY sortOrder")
+    fun items(listId: String): Flow<List<WatchlistItemEntity>>
+
+    @Query("SELECT * FROM watchlist_items WHERE listId = :listId ORDER BY sortOrder")
+    suspend fun itemsOnce(listId: String): List<WatchlistItemEntity>
+
+    @Query("SELECT COUNT(*) FROM watchlists")
+    suspend fun countLists(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertList(list: WatchlistEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertItems(items: List<WatchlistItemEntity>)
+
+    @Query("DELETE FROM watchlist_items WHERE listId = :listId AND symbol = :symbol")
+    suspend fun deleteItem(listId: String, symbol: String)
+
+    @Query("DELETE FROM watchlist_items WHERE listId = :listId")
+    suspend fun deleteItems(listId: String)
+
+    @Query("DELETE FROM watchlists WHERE id = :listId")
+    suspend fun deleteList(listId: String)
+
+    @Query("UPDATE watchlist_items SET sortOrder = :order WHERE listId = :listId AND symbol = :symbol")
+    suspend fun setOrder(listId: String, symbol: String, order: Int)
+
+    @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM watchlist_items WHERE listId = :listId")
+    suspend fun maxOrder(listId: String): Int
+}
+
+@Database(
+    entities = [CandleEntity::class, SymbolEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
+    version = 2,
+    exportSchema = false,
+)
 abstract class ChartDeskDatabase : RoomDatabase() {
     abstract fun candleDao(): CandleDao
     abstract fun symbolDao(): SymbolDao
+    abstract fun watchlistDao(): WatchlistDao
 }

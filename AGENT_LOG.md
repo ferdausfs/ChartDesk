@@ -4,6 +4,25 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 5)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 5 — watchlist.
+- **What changed:** Room v2 with `watchlists` + `watchlist_items` and a real migration; repository for multiple
+  named lists (create/rename/delete), add/remove symbols, transactional reorder; 5-second ticker polling for the
+  selected list with offline flag; sort modes (default/change/price/name); long-press drag reorder with haptic;
+  add-symbol search dialog; landscape right-hand watchlist panel; row tap opens the chart tab on that symbol through
+  `ChartRequestBus`.
+- **Touched files:** `data/db/ChartDeskDatabase.kt`, `di/DatabaseModule.kt`, `data/watchlist/*`,
+  `data/ChartRequestBus.kt`, `feature/watchlist/*`, `feature/nav/NavigationViewModel.kt`,
+  `ui/screens/WatchlistScreen.kt`, `ui/nav/ChartDeskRoot.kt`, `feature/chart/ChartViewModel.kt`,
+  `app/src/test/.../WatchlistTest.kt`.
+- **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (30 JVM tests incl. reorder + sorting).
+- **Commit:** `__HASH5__`.
+- **Pending:** feature 6 (indicators).
+- **Notes:** `WatchlistSorting` is pure so sorting stays unit-testable; the ticker loop is cancelled and restarted
+  whenever the symbol set changes to avoid stale subscriptions.
+
 ## 2026-11-24 — Session 1 (feature 4)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -18,7 +37,7 @@ Newest entries first. Never delete an entry.
   `ui/screens/ChartScreen.kt`, `feature/chart/ChartViewModel.kt`, `feature/settings/*`, `data/settings/*`,
   `chart/{ChartCommand,ChartController,ScreenshotManager}.kt`, `assets/chart/app.js`, manifest + FileProvider.
 - **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (23 JVM tests); JS tests unchanged and green.
-- **Commit:** `__HASH__`.
+- **Commit:** `c91ca39`.
 - **Pending:** feature 5 (watchlist).
 - **Notes:** settings flows are the single source for theme; chart theme is pushed through the bridge so the WebView
   never diverges from the Compose shell.

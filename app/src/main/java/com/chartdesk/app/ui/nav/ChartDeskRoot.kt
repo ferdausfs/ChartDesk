@@ -41,11 +41,14 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
+import com.chartdesk.app.feature.nav.NavigationViewModel
 import com.chartdesk.app.ui.screens.AlertsScreen
 import com.chartdesk.app.ui.screens.ChartScreen
 import com.chartdesk.app.ui.screens.MoreScreen
 import com.chartdesk.app.ui.screens.ScriptsScreen
+import com.chartdesk.app.ui.screens.WatchlistPanel
 import com.chartdesk.app.ui.screens.WatchlistScreen
 import com.chartdesk.app.ui.theme.ChartDeskType
 import com.chartdesk.app.ui.theme.LocalChartDeskPalette
@@ -59,8 +62,12 @@ enum class RootTab(val route: String, val label: String, val icon: ImageVector) 
 }
 
 @Composable
-fun ChartDeskRoot() {
+fun ChartDeskRoot(navVm: NavigationViewModel = hiltViewModel()) {
     val navController = rememberNavController()
+    val openSymbol: (String) -> Unit = { symbol ->
+        navVm.openSymbol(symbol)
+        navController.navigateTo(RootTab.Chart)
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val current = backStackEntry?.destination
     var fullscreen by rememberSaveable { mutableStateOf(false) }
@@ -84,9 +91,12 @@ fun ChartDeskRoot() {
                     modifier = Modifier.weight(1f),
                     fullscreen = fullscreen,
                     onToggleFullscreen = { fullscreen = !fullscreen },
+                    onOpenSymbol = openSymbol,
                 )
                 if (!fullscreen && onChartTab) {
-                    WatchlistPanelPlaceholder(Modifier.width(220.dp))
+                    Box(Modifier.width(220.dp)) {
+                        WatchlistPanel(onOpenSymbol = openSymbol)
+                    }
                 }
             }
         } else {
@@ -123,6 +133,7 @@ fun ChartDeskRoot() {
                     modifier = Modifier.padding(innerPadding),
                     fullscreen = fullscreen,
                     onToggleFullscreen = { fullscreen = !fullscreen },
+                    onOpenSymbol = openSymbol,
                 )
             }
         }
@@ -135,6 +146,7 @@ private fun NavHostContent(
     modifier: Modifier,
     fullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
+    onOpenSymbol: (String) -> Unit,
 ) {
     NavHost(
         navController = navController,
@@ -147,7 +159,7 @@ private fun NavHostContent(
                 onToggleFullscreen = onToggleFullscreen,
             )
         }
-        composable(RootTab.Watchlist.route) { WatchlistScreen() }
+        composable(RootTab.Watchlist.route) { WatchlistScreen(onOpenSymbol = onOpenSymbol) }
         composable(RootTab.Scripts.route) { ScriptsScreen() }
         composable(RootTab.Alerts.route) { AlertsScreen() }
         composable(RootTab.More.route) { MoreScreen() }
@@ -193,22 +205,4 @@ private fun LeftRail(current: androidx.navigation.NavDestination?, onSelect: (Ro
     }
 }
 
-@Composable
-private fun WatchlistPanelPlaceholder(modifier: Modifier = Modifier) {
-    val palette = LocalChartDeskPalette.current
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .background(palette.surface)
-            .padding(12.dp),
-    ) {
-        Text("Watchlist", style = ChartDeskType.price, fontWeight = FontWeight.SemiBold, color = palette.textPrimary)
-        Text(
-            "Live lists land in feature 5.",
-            style = ChartDeskType.label,
-            color = palette.textSecondary,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Box(Modifier.fillMaxWidth().weight(1f))
-    }
-}
+
