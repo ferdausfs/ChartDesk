@@ -78,6 +78,9 @@ interface LayoutDaoDb {
     @Query("SELECT * FROM layouts ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<LayoutEntityDb>>
 
+    @Query("SELECT * FROM layouts")
+    suspend fun allOnce(): List<LayoutEntityDb>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(layout: LayoutEntityDb)
 
@@ -116,6 +119,9 @@ interface AlertDao {
 
     @Query("SELECT * FROM alerts WHERE active = 1")
     suspend fun activeOnce(): List<AlertEntity>
+
+    @Query("SELECT * FROM alerts")
+    suspend fun allOnce(): List<AlertEntity>
 
     @Query("SELECT * FROM alert_events ORDER BY triggeredAt DESC LIMIT 50")
     fun observeEvents(): Flow<List<AlertEventEntity>>
@@ -179,6 +185,9 @@ interface DrawingDao {
     @Query("SELECT * FROM drawings WHERE symbol = :symbol ORDER BY sortOrder")
     fun observe(symbol: String): Flow<List<DrawingEntity>>
 
+    @Query("SELECT * FROM drawings")
+    suspend fun allOnce(): List<DrawingEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(rows: List<DrawingEntity>)
 
@@ -200,6 +209,9 @@ data class IndicatorEntity(
 interface IndicatorDao {
     @Query("SELECT * FROM indicators WHERE symbol = :symbol ORDER BY sortOrder")
     fun observe(symbol: String): Flow<List<IndicatorEntity>>
+
+    @Query("SELECT * FROM indicators")
+    suspend fun allOnce(): List<IndicatorEntity>
 
     @Query("SELECT COUNT(*) FROM indicators WHERE symbol = :symbol")
     suspend fun count(symbol: String): Int
@@ -248,6 +260,9 @@ interface WatchlistDao {
 
     @Query("SELECT * FROM watchlist_items WHERE listId = :listId ORDER BY sortOrder")
     suspend fun itemsOnce(listId: String): List<WatchlistItemEntity>
+
+    @Query("SELECT * FROM watchlist_items ORDER BY listId, sortOrder")
+    suspend fun itemsAll(): List<WatchlistItemEntity>
 
     @Query("SELECT COUNT(*) FROM watchlists")
     suspend fun countLists(): Int
