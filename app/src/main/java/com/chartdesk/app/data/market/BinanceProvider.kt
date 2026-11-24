@@ -4,11 +4,13 @@ import com.chartdesk.app.data.Candle
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -43,14 +45,14 @@ class BinanceProvider @Inject constructor(
             .toList()
     }
 
-    private suspend fun <T> rest(path: String, parse: (String) -> T): T {
+    private suspend fun <T> rest(path: String, parse: (String) -> T): T = withContext(Dispatchers.IO) {
         var last: Throwable? = null
         for (base in restBases) {
             try {
                 val request = Request.Builder().url("$base$path").build()
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-                    return parse(response.body?.string().orEmpty())
+                    return@withContext parse(response.body?.string().orEmpty())
                 }
             } catch (t: Throwable) {
                 last = t
@@ -58,6 +60,7 @@ class BinanceProvider @Inject constructor(
         }
         throw last ?: IOException("No Binance endpoint reachable")
     }
+
 
     private suspend fun fetchExchangeInfo(): List<SymbolInfo> =
         rest("/api/v3/exchangeInfo?permissions=SPOT") { BinanceParsers.parseExchangeInfo(it) }
