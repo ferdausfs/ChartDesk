@@ -1,0 +1,11 @@
+name = "chartdesk-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chartdesk"
+database_id = "REPLACE_WITH_D1_ID"

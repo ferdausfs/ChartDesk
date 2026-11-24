@@ -4,6 +4,27 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 10)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 10 — alerts.
+- **What changed:** Room v6 `alerts` + `alert_events` (+ migration); pure `AlertEngine`; in-app 30s evaluation while the
+  Alerts screen is open; `AlertCheckWorker` (WorkManager, 15 min, network constraint, unique work) for background
+  checks; notification channel + POST_NOTIFICATIONS request on Android 13+; alert manager UI (create above/below,
+  list, triggered history, delete, check-now, offline bar); Cloudflare Worker + D1 schema/endpoints for the
+  server-side path (`backend/`), including a per-minute cron evaluator.
+- **Touched files:** `backend/**`, `data/alerts/*`, `data/db/ChartDeskDatabase.kt`, `di/DatabaseModule.kt`,
+  `feature/alerts/*`, `ui/screens/{AlertsScreen.kt,PlaceholderScreens.kt}`, `ChartDeskApp.kt`, `MainActivity.kt`,
+  `docs/ALERTS.md`, `app/src/test/.../AlertEngineTest.kt`.
+- **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (AlertEngine tests included); JS suite unchanged.
+- **Commit:** `__HASH10__`.
+- **Blocker (logged, worked around):** the supplied Cloudflare API token verifies but cannot list accounts or zones
+  (`/accounts` returns an empty list, `/memberships` is unauthorised), so Wrangler has no Account ID to deploy to.
+  Server code is complete and documented; the app ships a local-first evaluator meanwhile. Provide the Account ID
+  to enable `wrangler deploy` + D1 migration.
+- **Pending:** feature 11 (multi-chart & layouts).
+- **Notes:** no FCM project, so delivery is local notifications; indicator/drawing alerts are not built yet.
+
 ## 2026-11-24 — Session 1 (feature 9)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -21,7 +42,7 @@ Newest entries first. Never delete an entry.
   `js-tests/{pine.test.cjs,browser.test.cjs,package.json}`.
 - **Verification:** 51/51 JS tests (15 Pine suites + browser run/clear); `./gradlew assembleDebug testDebugUnitTest`
   green.
-- **Commit:** `__HASH9__`.
+- **Commit:** `74d9696`.
 - **Pending:** feature 10 (alerts).
 - **Notes:** named arguments (`title=`, `color=`) are supported; `ta.*` accepts builtin/user series but nested
   `ta.sma(...)` inside `ta.crossover(...)` only sees the current value — documented limitation.
