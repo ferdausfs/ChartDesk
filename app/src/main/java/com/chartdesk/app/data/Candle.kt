@@ -104,5 +104,5 @@ fun formatPrice(price: Double, precision: Int = pricePrecision(price)): String {
 fun formatSignedPercent(value: Double): String {
     if (abs(value) < 0.005) return "0.00%"
     val sign = if (value > 0) "+" else ""
-    return "$sign${String.format("%.2f", value)}%"
+    return "$sign${String.format(Locale.US, "%.2f", value)}%"
 }

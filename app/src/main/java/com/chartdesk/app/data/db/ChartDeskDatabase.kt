@@ -62,6 +62,29 @@ data class WatchlistItemEntity(
     val sortOrder: Int,
 )
 
+@Entity(tableName = "layouts")
+data class LayoutEntityDb(
+    @PrimaryKey val id: String,
+    val name: String,
+    val symbol: String,
+    val timeframe: String,
+    val chartType: String,
+    val grid: Int,
+    val createdAt: Long,
+)
+
+@Dao
+interface LayoutDaoDb {
+    @Query("SELECT * FROM layouts ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<LayoutEntityDb>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(layout: LayoutEntityDb)
+
+    @Query("DELETE FROM layouts WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Entity(tableName = "alerts")
 data class AlertEntity(
     @PrimaryKey val id: String,
@@ -262,8 +285,9 @@ interface WatchlistDao {
         ScriptEntity::class,
         AlertEntity::class,
         AlertEventEntity::class,
+        LayoutEntityDb::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class ChartDeskDatabase : RoomDatabase() {
@@ -274,4 +298,5 @@ abstract class ChartDeskDatabase : RoomDatabase() {
     abstract fun drawingDao(): DrawingDao
     abstract fun scriptDao(): ScriptDao
     abstract fun alertDao(): AlertDao
+    abstract fun layoutDao(): LayoutDaoDb
 }

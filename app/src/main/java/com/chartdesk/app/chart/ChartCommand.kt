@@ -106,6 +106,153 @@ sealed interface ChartCommand {
         override fun payload(): JsonObject = buildJsonObject { put("symbol", symbol) }
     }
 
+    data class IndicatorDto(
+        val uid: String,
+        val type: String,
+        val params: Map<String, Double>,
+        val visible: Boolean,
+    )
+
+    data class SetIndicators(val list: List<IndicatorDto>) : ChartCommand {
+        override val type = "setIndicators"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("list", JsonArray(list.map { dto ->
+                buildJsonObject {
+                    put("uid", dto.uid)
+                    put("type", dto.type)
+                    put("visible", dto.visible)
+                    put("params", buildJsonObject { dto.params.forEach { (key, value) -> put(key, value) } })
+                }
+            }))
+        }
+    }
+
+    data class SetDrawings(val list: List<com.chartdesk.app.data.drawings.DrawingDto>) : ChartCommand {
+        override val type = "setDrawings"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("list", JsonArray(list.map { dto ->
+                buildJsonObject {
+                    put("id", dto.id)
+                    put("type", dto.type)
+                    put("locked", dto.locked)
+                    dto.text?.let { put("text", it) }
+                    put("points", JsonArray(dto.points.map { point ->
+                        buildJsonObject {
+                            point.time?.let { put("time", it) }
+                            put("price", point.price)
+                        }
+                    }))
+                }
+            }))
+        }
+    }
+
+    data class SetDrawTool(val tool: String) : ChartCommand {
+        override val type = "setDrawTool"
+        override fun payload(): JsonObject = buildJsonObject { put("tool", tool) }
+    }
+
+    data class SetDrawMode(val mode: String) : ChartCommand {
+        override val type = "setDrawMode"
+        override fun payload(): JsonObject = buildJsonObject { put("mode", mode) }
+    }
+
+    data class LockDrawing(val locked: Boolean) : ChartCommand {
+        override val type = "lockDrawing"
+        override fun payload(): JsonObject = buildJsonObject { put("locked", locked) }
+    }
+
+    data class UpdateDrawingText(val id: String, val text: String) : ChartCommand {
+        override val type = "updateDrawingText"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("id", id)
+            put("text", text)
+        }
+    }
+
+    data object UndoDrawing : ChartCommand {
+        override val type = "undoDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object RedoDrawing : ChartCommand {
+        override val type = "redoDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object DeleteDrawing : ChartCommand {
+        override val type = "deleteDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object ClearDrawings : ChartCommand {
+        override val type = "clearDrawings"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class ReplayStart(val index: Int) : ChartCommand {
+        override val type = "replayStart"
+        override fun payload(): JsonObject = buildJsonObject { put("index", index) }
+    }
+
+    data class ReplayPlay(val speed: Double) : ChartCommand {
+        override val type = "replayPlay"
+        override fun payload(): JsonObject = buildJsonObject { put("speed", speed) }
+    }
+
+    data object ReplayPause : ChartCommand {
+        override val type = "replayPause"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class ReplayStep(val delta: Int) : ChartCommand {
+        override val type = "replayStep"
+        override fun payload(): JsonObject = buildJsonObject { put("delta", delta) }
+    }
+
+    data class ReplaySeek(val index: Int) : ChartCommand {
+        override val type = "replaySeek"
+        override fun payload(): JsonObject = buildJsonObject { put("index", index) }
+    }
+
+    data object ReplayStop : ChartCommand {
+        override val type = "replayStop"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class ReplaySpeed(val speed: Double) : ChartCommand {
+        override val type = "replaySpeed"
+        override fun payload(): JsonObject = buildJsonObject { put("speed", speed) }
+    }
+
+    data class ReplayTrade(val action: String) : ChartCommand {
+        override val type = "replayTrade"
+        override fun payload(): JsonObject = buildJsonObject { put("action", action) }
+    }
+
+    data class RunPine(val code: String) : ChartCommand {
+        override val type = "runPine"
+        override fun payload(): JsonObject = buildJsonObject { put("code", code) }
+    }
+
+    data object ClearPine : ChartCommand {
+        override val type = "clearPine"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class SetCrosshair(val time: Long, val price: Double) : ChartCommand {
+        override val type = "setCrosshair"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("time", time)
+            put("price", price)
+        }
+    }
+
+    data object ClearCrosshair : ChartCommand {
+        override val type = "clearCrosshair"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
     data class SetOptions(
         val grid: Boolean = true,
         val crosshair: Boolean = true,

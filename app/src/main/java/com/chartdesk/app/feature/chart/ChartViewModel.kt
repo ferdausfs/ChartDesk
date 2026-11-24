@@ -4,9 +4,15 @@ import android.content.Context
 import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.os.SystemClock
 import com.chartdesk.app.chart.ChartCommand
 import com.chartdesk.app.chart.ChartController
+import com.chartdesk.app.chart.ChartControllerFactory
 import com.chartdesk.app.chart.ChartEvent
+import com.chartdesk.app.data.ChartStateBus
+import com.chartdesk.app.data.ChartSummary
+import com.chartdesk.app.data.LayoutRequest
+import com.chartdesk.app.data.LayoutRequestBus
 import com.chartdesk.app.data.Candle
 import com.chartdesk.app.data.ChartRequestBus
 import com.chartdesk.app.data.changePercent
@@ -70,6 +76,7 @@ data class ChartUiState(
     val replayEntry: Double = 0.0,
     val replayPnl: Double = 0.0,
     val replayPnlPercent: Double = 0.0,
+    val gridMode: Int = 1,
 )
 
 @HiltViewModel
@@ -80,6 +87,9 @@ class ChartViewModel @Inject constructor(
     private val indicatorRepository: IndicatorRepository,
     private val drawingRepository: DrawingRepository,
     private val requestBus: ChartRequestBus,
+    private val controllerFactory: ChartControllerFactory,
+    private val stateBus: ChartStateBus,
+    private val layoutRequestBus: LayoutRequestBus,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -95,14 +105,21 @@ class ChartViewModel @Inject constructor(
     private var drawingsJob: Job? = null
     private var lastSentDrawings: String = ""
     private var everConnected = false
+    private var lastSettings: AppSettings = AppSettings()
+    private val secondaryControllers = mutableListOf<ChartController>()
+    private var lastCrosshairAt = 0L
 
     init {
         viewModelScope.launch {
             controller.events.collect { event ->
                 when (event) {
-                    is ChartEvent.Crosshair -> _state.value = _state.value.copy(
-                        hovered = Candle(event.time, event.open, event.high, event.low, event.close, event.volume),
-                    )
+                    is ChartEvent.Crosshair -> {
+                        _state.value = _state.value.copy(
+                            hovered = Candle(event.time, event.open, event.high, event.low, event.close, event.volume),
+                        )
+                        broadcastCrosshair(event, controller)
+                    }
+                    is ChartEvent.Unknown -> if (event.type == "crosshair-empty") clearCrosshair(controller)
                     is ChartEvent.ChartError -> _state.value = _state.value.copy(error = event.message)
                     is ChartEvent.DrawingsChanged -> persistDrawings(event.list)
                     is ChartEvent.DrawingSelected -> _state.value = _state.value.copy(
@@ -127,6 +144,14 @@ class ChartViewModel @Inject constructor(
                         replayPnlPercent = event.pnlPercent,
                     )
                     else -> Unit
+                }
+            }
+        }
+        viewModelScope.launch {
+            layoutRequestBus.request.collect { request ->
+                if (request != null) {
+                    applyLayout(request)
+                    layoutRequestBus.consume()
                 }
             }
         }
@@ -170,7 +195,90 @@ class ChartViewModel @Inject constructor(
         )
     }
 
+    private fun allControllers(): List<ChartController> = listOf(controller) + secondaryControllers
+
+    fun secondaryController(index: Int): ChartController? = secondaryControllers.getOrNull(index)
+
+    fun setGrid(mode: Int) {
+        val target = if (mode == 2 || mode == 4) mode else 1
+        val s = _state.value
+        while (secondaryControllers.size < target - 1) {
+            val extra = controllerFactory.create()
+            secondaryControllers += extra
+            observeSecondary(extra)
+            extra.send(
+                ChartCommand.Init(
+                    dark = isDark(lastSettings.themeMode),
+                    colorBlind = lastSettings.colorBlind,
+                    chartType = s.chartType,
+                    priceScale = s.priceScale,
+                    symbol = s.symbol,
+                    timeframe = s.timeframe,
+                ),
+            )
+            extra.send(ChartCommand.SetOptions(lastSettings.showGrid, lastSettings.showCrosshair, lastSettings.showWatermark))
+            if (s.candles.isNotEmpty()) {
+                extra.send(
+                    ChartCommand.SetCandles(s.symbol, s.timeframe, s.candles, s.precision, fit = true),
+                )
+            }
+        }
+        while (secondaryControllers.size > target - 1) {
+            secondaryControllers.removeAt(secondaryControllers.lastIndex)
+        }
+        _state.value = _state.value.copy(gridMode = target)
+        syncBus()
+    }
+
+    private fun observeSecondary(extra: ChartController) {
+        viewModelScope.launch {
+            extra.events.collect { event ->
+                when (event) {
+                    is ChartEvent.Crosshair -> broadcastCrosshair(event, extra)
+                    is ChartEvent.Unknown -> if (event.type == "crosshair-empty") clearCrosshair(extra)
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    private fun broadcastCrosshair(event: ChartEvent.Crosshair, from: ChartController) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastCrosshairAt < 45) return
+        lastCrosshairAt = now
+        allControllers().filter { it !== from }.forEach {
+            it.send(ChartCommand.SetCrosshair(event.time, event.close))
+        }
+    }
+
+    private fun clearCrosshair(from: ChartController) {
+        allControllers().filter { it !== from }.forEach { it.send(ChartCommand.ClearCrosshair) }
+    }
+
+    private fun applyLayout(request: LayoutRequest) {
+        _state.value = _state.value.copy(
+            symbol = request.symbol,
+            timeframe = request.timeframe,
+            chartType = request.chartType,
+            candles = emptyList(),
+        )
+        setGrid(request.grid)
+        controller.send(ChartCommand.SetSymbol(request.symbol))
+        controller.send(ChartCommand.SetTimeframe(request.timeframe))
+        controller.send(ChartCommand.SetChartType(request.chartType))
+        observeIndicators(request.symbol)
+        observeDrawings(request.symbol)
+        load()
+    }
+
+    private fun syncBus() {
+        val s = _state.value
+        stateBus.update(ChartSummary(s.symbol, s.timeframe, s.chartType, s.gridMode))
+    }
+
     private fun applySettings(settings: AppSettings, initialLoad: Boolean) {
+        lastSettings = settings
+        syncBus()
         if (initialLoad) {
             _state.value = _state.value.copy(
                 timeframe = settings.defaultTimeframe,
@@ -178,8 +286,10 @@ class ChartViewModel @Inject constructor(
                 priceScale = settings.priceScale,
             )
         }
-        controller.send(ChartCommand.SetTheme(isDark(settings.themeMode), settings.colorBlind))
-        controller.send(ChartCommand.SetOptions(settings.showGrid, settings.showCrosshair, settings.showWatermark))
+        allControllers().forEach {
+            it.send(ChartCommand.SetTheme(isDark(settings.themeMode), settings.colorBlind))
+            it.send(ChartCommand.SetOptions(settings.showGrid, settings.showCrosshair, settings.showWatermark))
+        }
         if (!initialLoad && settings.priceScale != _state.value.priceScale) {
             _state.value = _state.value.copy(priceScale = settings.priceScale)
             controller.send(ChartCommand.SetPriceScale(settings.priceScale))
@@ -205,15 +315,17 @@ class ChartViewModel @Inject constructor(
                     offline = snapshot.fromCache,
                     error = null,
                 )
-                controller.send(
-                    ChartCommand.SetCandles(
-                        symbol = s.symbol,
-                        timeframe = s.timeframe,
-                        candles = candles,
-                        precision = precision,
-                        fit = true,
-                    ),
-                )
+                allControllers().forEach { target ->
+                    target.send(
+                        ChartCommand.SetCandles(
+                            symbol = s.symbol,
+                            timeframe = s.timeframe,
+                            candles = candles,
+                            precision = precision,
+                            fit = true,
+                        ),
+                    )
+                }
                 startLive()
             } catch (t: Throwable) {
                 _state.value = _state.value.copy(
@@ -257,22 +369,24 @@ class ChartViewModel @Inject constructor(
             connection = ConnectionState.Live,
             offline = false,
         )
-        controller.send(ChartCommand.UpdateCandle(candle))
+        allControllers().forEach { it.send(ChartCommand.UpdateCandle(candle)) }
     }
 
     private suspend fun refreshAfterReconnect() {
         val s = _state.value
         runCatching { repository.loadCandles(s.symbol, s.timeframe, 120) }.onSuccess { snapshot ->
             _state.value = _state.value.copy(candles = snapshot.candles, offline = snapshot.fromCache)
-            controller.send(
-                ChartCommand.SetCandles(
-                    symbol = s.symbol,
-                    timeframe = s.timeframe,
-                    candles = snapshot.candles,
-                    precision = _state.value.precision,
-                    fit = false,
-                ),
-            )
+            allControllers().forEach { target ->
+                target.send(
+                    ChartCommand.SetCandles(
+                        symbol = s.symbol,
+                        timeframe = s.timeframe,
+                        candles = snapshot.candles,
+                        precision = _state.value.precision,
+                        fit = false,
+                    ),
+                )
+            }
         }
     }
 
@@ -283,9 +397,10 @@ class ChartViewModel @Inject constructor(
         }
         resetReplay()
         _state.value = _state.value.copy(symbol = symbol, showSymbolPicker = false, candles = emptyList())
-        controller.send(ChartCommand.SetSymbol(symbol))
+        allControllers().forEach { it.send(ChartCommand.SetSymbol(symbol)) }
         observeIndicators(symbol)
         observeDrawings(symbol)
+        syncBus()
         load()
     }
 
@@ -432,17 +547,21 @@ class ChartViewModel @Inject constructor(
         if (tf == _state.value.timeframe) return
         resetReplay()
         _state.value = _state.value.copy(timeframe = tf, candles = emptyList())
-        controller.send(ChartCommand.SetTimeframe(tf))
+        allControllers().forEach { it.send(ChartCommand.SetTimeframe(tf)) }
+        syncBus()
         load()
     }
 
     fun setChartType(type: String) {
         if (type == _state.value.chartType) return
         _state.value = _state.value.copy(chartType = type)
-        controller.send(ChartCommand.SetChartType(type))
+        allControllers().forEach { it.send(ChartCommand.SetChartType(type)) }
+        syncBus()
     }
 
-    fun resetView() = controller.send(ChartCommand.ResetView)
+    fun resetView() {
+        allControllers().forEach { it.send(ChartCommand.ResetView) }
+    }
 
     fun showError(message: String) = controller.send(ChartCommand.ShowError(message))
 

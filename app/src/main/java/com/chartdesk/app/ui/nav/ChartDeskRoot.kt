@@ -162,7 +162,9 @@ private fun NavHostContent(
         composable(RootTab.Watchlist.route) { WatchlistScreen(onOpenSymbol = onOpenSymbol) }
         composable(RootTab.Scripts.route) { ScriptsScreen() }
         composable(RootTab.Alerts.route) { AlertsScreen() }
-        composable(RootTab.More.route) { MoreScreen() }
+        composable(RootTab.More.route) {
+            MoreScreen(onOpenChart = { navController.navigateTo(RootTab.Chart) })
+        }
     }
 }
 

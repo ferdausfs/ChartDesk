@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Functions
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
@@ -61,6 +62,7 @@ fun ChartToolbar(
     onChartType: (String) -> Unit,
     onIndicators: () -> Unit,
     onReplay: () -> Unit,
+    onGrid: () -> Unit,
     onSettings: () -> Unit,
     onScreenshot: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -138,6 +140,7 @@ fun ChartToolbar(
         }
         ToolbarIcon(Icons.Outlined.Functions, "Indicators", onIndicators)
         ToolbarIcon(Icons.Outlined.PlayArrow, "Bar replay", onReplay)
+        ToolbarIcon(Icons.Outlined.GridView, "Chart grid", onGrid)
         ToolbarIcon(Icons.Outlined.PhotoCamera, "Screenshot", onScreenshot)
         ToolbarIcon(Icons.Outlined.Settings, "Settings", onSettings)
         ToolbarIcon(

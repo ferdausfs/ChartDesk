@@ -2,6 +2,7 @@ package com.chartdesk.app.chart
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -33,6 +34,48 @@ object ChartEventParser {
                         low = dbl("low"),
                         close = dbl("close"),
                         volume = dbl("volume"),
+                    )
+                }
+                "drawingsChanged" -> ChartEvent.DrawingsChanged(
+                    com.chartdesk.app.data.drawings.DrawingCodec.parseBridgeList(json, payload),
+                )
+                "drawingSelected" -> ChartEvent.DrawingSelected(
+                    id = payload["id"]?.jsonPrimitive?.contentOrNull,
+                    locked = payload["locked"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                )
+                "textRequest" -> ChartEvent.TextRequest(str("id") ?: "")
+                "measure" -> ChartEvent.Measure(dbl("from"), dbl("to"), dbl("pct"))
+                "modeChanged" -> ChartEvent.ModeChanged(str("mode") ?: "none")
+                "replayState" -> ChartEvent.ReplayState(
+                    active = payload["active"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    playing = payload["playing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    index = payload["index"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                    total = payload["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                    speed = dbl("speed").takeIf { it > 0 } ?: 1.0,
+                    price = dbl("price"),
+                    side = str("side")?.takeIf { it.isNotEmpty() && it != "null" },
+                    entry = dbl("entry"),
+                    pnl = dbl("pnl"),
+                    pnlPercent = dbl("pnlPercent"),
+                )
+                "pineResult" -> {
+                    val errors = (payload["errors"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { el ->
+                        val obj = el.jsonObject
+                        ChartEvent.PineErrorInfo(
+                            message = obj["message"]?.jsonPrimitive?.content ?: "error",
+                            line = obj["line"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
+                            column = obj["column"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
+                        )
+                    } ?: emptyList()
+                    val warnings = (payload["warnings"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull {
+                        it.jsonPrimitive.contentOrNull
+                    } ?: emptyList()
+                    ChartEvent.PineResult(
+                        ok = payload["ok"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                        errors = errors,
+                        warnings = warnings,
+                        plots = payload["plots"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                        shapes = payload["shapes"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
                     )
                 }
                 "haptic" -> ChartEvent.Haptic(str("kind") ?: "tap")

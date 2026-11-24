@@ -155,12 +155,15 @@ fun ChartScreen(
                     onChartType = vm::setChartType,
                     onIndicators = { showIndicatorsSheet = true },
                     onReplay = { showReplaySheet = true },
+                    onGrid = { vm.setGrid(if (state.gridMode == 1) 2 else if (state.gridMode == 2) 4 else 1) },
                     onSettings = { showSettingsSheet = true },
                     onScreenshot = ::takeScreenshot,
                     onToggleFullscreen = onToggleFullscreen,
                 )
             }
-            Row(Modifier.weight(1f).fillMaxWidth()) {
+            if (state.gridMode > 1) {
+                ChartGrid(state = state, vm = vm, modifier = Modifier.weight(1f).fillMaxWidth())
+            } else Row(Modifier.weight(1f).fillMaxWidth()) {
                 if (!fullscreen) {
                     DrawingRail(
                         mode = state.drawingMode,
@@ -284,6 +287,52 @@ fun ChartScreen(
             onDefaultChartType = settingsVm::setDefaultChartType,
             onPriceScale = settingsVm::setPriceScale,
             onDismiss = { showSettingsSheet = false },
+        )
+    }
+}
+
+@Composable
+private fun ChartGrid(state: ChartUiState, vm: ChartViewModel, modifier: Modifier = Modifier) {
+    val palette = LocalChartDeskPalette.current
+    val controllers = listOf(vm.controller) + (0 until (state.gridMode - 1)).mapNotNull { vm.secondaryController(it) }
+    Column(modifier.background(palette.background)) {
+        if (state.gridMode == 2) {
+            controllers.forEachIndexed { index, controller ->
+                GridCell(controller, state, index == 0, Modifier.weight(1f))
+            }
+        } else {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                controllers.getOrNull(0)?.let { GridCell(it, state, true, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(1)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
+            }
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                controllers.getOrNull(2)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
+                controllers.getOrNull(3)?.let { GridCell(it, state, false, Modifier.weight(1f).fillMaxHeight()) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GridCell(
+    controller: com.chartdesk.app.chart.ChartController,
+    state: ChartUiState,
+    primary: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val palette = LocalChartDeskPalette.current
+    Box(modifier.border(1.dp, palette.border)) {
+        ChartWebView(controller, Modifier.fillMaxSize())
+        Text(
+            "${state.symbol} · ${state.timeframe}",
+            style = ChartDeskType.label,
+            color = palette.textSecondary,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(4.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(palette.surface.copy(alpha = 0.85f))
+                .padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
 }

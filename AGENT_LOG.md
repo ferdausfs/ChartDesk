@@ -4,6 +4,24 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 11)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 11 — multi-chart & layouts.
+- **What changed:** `ChartControllerFactory` creates independent controllers for the 2/4 grid; the chart toolbar
+  cycles 1→2→4 cells; every cell receives the same candles/updates/symbol/timeframe/type; crosshair is broadcast
+  between cells (throttled, with a JS guard against feedback loops); Room v7 `layouts` table + migration; layout
+  repository saves the current symbol/timeframe/chart type/grid; More tab now lists saved layouts (apply → chart tab,
+  delete) and shows version/attribution; `ChartStateBus` + `LayoutRequestBus` connect the tabs.
+- **Touched files:** `assets/chart/app.js`, `chart/{ChartCommand,ChartControllerFactory}.kt`,
+  `data/{ChartStateBus.kt,layouts/*,db/ChartDeskDatabase.kt}`, `di/DatabaseModule.kt`,
+  `feature/{chart/ChartViewModel.kt,layouts/*}`, `ui/chart/ChartToolbar.kt`,
+  `ui/screens/{ChartScreen.kt,MoreScreen.kt}`, `ui/nav/ChartDeskRoot.kt`.
+- **Verification:** `./gradlew assembleDebug testDebugUnitTest` green; JS suite unchanged (51).
+- **Commit:** `__HASH11__`.
+- **Pending:** feature 12 (account & sync).
+- **Notes:** grid cells share one symbol/timeframe by design (sync-on); drawings/indicators stay on the main cell.
+
 ## 2026-11-24 — Session 1 (feature 10)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -17,7 +35,7 @@ Newest entries first. Never delete an entry.
   `feature/alerts/*`, `ui/screens/{AlertsScreen.kt,PlaceholderScreens.kt}`, `ChartDeskApp.kt`, `MainActivity.kt`,
   `docs/ALERTS.md`, `app/src/test/.../AlertEngineTest.kt`.
 - **Verification:** `./gradlew assembleDebug testDebugUnitTest` green (AlertEngine tests included); JS suite unchanged.
-- **Commit:** `__HASH10__`.
+- **Commit:** `655d4b4`.
 - **Blocker (logged, worked around):** the supplied Cloudflare API token verifies but cannot list accounts or zones
   (`/accounts` returns an empty list, `/memberships` is unauthorised), so Wrangler has no Account ID to deploy to.
   Server code is complete and documented; the app ships a local-first evaluator meanwhile. Provide the Account ID

@@ -76,6 +76,16 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `layouts` (" +
+                "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `symbol` TEXT NOT NULL, `timeframe` TEXT NOT NULL, " +
+                "`chartType` TEXT NOT NULL, `grid` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        )
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -84,7 +94,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): ChartDeskDatabase =
         Room.databaseBuilder(context, ChartDeskDatabase::class.java, "chartdesk.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
@@ -108,4 +118,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAlertDao(db: ChartDeskDatabase) = db.alertDao()
+
+    @Provides
+    fun provideLayoutDao(db: ChartDeskDatabase) = db.layoutDao()
 }
