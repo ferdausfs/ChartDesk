@@ -29,6 +29,19 @@ sealed interface ChartEvent {
 
     data class ModeChanged(val mode: String) : ChartEvent
 
+    data class ReplayState(
+        val active: Boolean,
+        val playing: Boolean,
+        val index: Int,
+        val total: Int,
+        val speed: Double,
+        val price: Double,
+        val side: String?,
+        val entry: Double,
+        val pnl: Double,
+        val pnlPercent: Double,
+    ) : ChartEvent
+
     data class Ack(val id: String) : ChartEvent
 
     data class Unknown(val type: String) : ChartEvent

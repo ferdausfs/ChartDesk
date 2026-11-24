@@ -47,6 +47,7 @@
     panes: {},
     syncing: false,
     options: { grid: true, crosshair: true, watermark: true },
+    replay: { active: false, playing: false, index: 0, speed: 1, timer: null, position: null },
   };
 
   var hooks = {
@@ -241,9 +242,15 @@
     });
   }
 
-  function displayedCandles() {
-    if (state.type === 'heikin') return lib.heikinAshi(state.raw);
+  function visibleRaw() {
+    if (state.replay.active) return state.raw.slice(0, state.replay.index + 1);
     return state.raw;
+  }
+
+  function displayedCandles() {
+    var base = state.type === 'heikin' ? lib.heikinAshi(state.raw) : state.raw;
+    if (state.replay.active) return base.slice(0, state.replay.index + 1);
+    return base;
   }
 
   function toSeriesData(type, candles) {
@@ -266,7 +273,7 @@
     if (!state.mainSeries) return;
     var shown = displayedCandles();
     state.mainSeries.setData(toSeriesData(state.type, shown));
-    if (state.volumeSeries) state.volumeSeries.setData(volumeData(state.raw));
+    if (state.volumeSeries) state.volumeSeries.setData(volumeData(visibleRaw()));
     if (state.raw.length) {
       var last = shown[shown.length - 1];
       setLastPriceLine(last.close);
@@ -301,8 +308,9 @@
     var p = palette();
     els.sym.textContent = state.symbol;
     els.tf.textContent = state.timeframe;
-    var last = state.raw.length ? state.raw[state.raw.length - 1] : null;
-    var shown = state.type === 'heikin' && bar ? bar : (bar || (state.type === 'heikin' && state.raw.length ? lib.heikinAshi(state.raw).pop() : last));
+    var visible = visibleRaw();
+    var last = visible.length ? visible[visible.length - 1] : null;
+    var shown = state.type === 'heikin' && bar ? bar : (bar || (state.type === 'heikin' && visible.length ? lib.heikinAshi(visible).pop() : last));
     if (!shown) {
       ['o', 'h', 'l', 'c'].forEach(function (k) { els[k].textContent = '—'; });
       els.chg.textContent = '—';
@@ -379,6 +387,7 @@
   }
 
   function setCandles(payload) {
+    if (state.replay.active) replayStop(true);
     var rows = payload.candles || [];
     var precision = payload.precision;
     state.raw = rows.map(function (r) {
@@ -402,6 +411,7 @@
   }
 
   function updateCandle(payload) {
+    if (state.replay.active) return;
     var row = payload.candle;
     if (!row) return;
     var candle = Array.isArray(row)
@@ -423,6 +433,109 @@
     for (var i = 0; i < hooks.afterData.length; i++) {
       try { hooks.afterData[i](displayedCandles()); } catch (e) { console.warn(e); }
     }
+  }
+
+  // ---- bar replay ---------------------------------------------------------
+  function replayEngine() {
+    return window.ChartDeskReplay;
+  }
+
+  function postReplay() {
+    var engine = replayEngine();
+    var visible = visibleRaw();
+    var price = visible.length ? visible[visible.length - 1].close : 0;
+    var summary = engine ? engine.summary(state.replay.position, price) : { side: null, entry: 0, pnl: 0, pnlPercent: 0 };
+    post('replayState', {
+      active: state.replay.active,
+      playing: state.replay.playing,
+      index: state.replay.index,
+      total: state.raw.length,
+      speed: state.replay.speed,
+      price: price,
+      side: summary.side,
+      entry: summary.entry,
+      pnl: summary.pnl,
+      pnlPercent: summary.pnlPercent,
+    });
+  }
+
+  function replayApply(fit) {
+    applyData(!!fit);
+    postReplay();
+  }
+
+  function replayStart(index) {
+    var engine = replayEngine();
+    if (!engine || !state.raw.length) return;
+    clearInterval(state.replay.timer);
+    state.replay.active = true;
+    state.replay.playing = false;
+    state.replay.index = engine.clampIndex(index, state.raw.length);
+    state.replay.position = null;
+    replayApply(true);
+  }
+
+  function replayPlay(speed) {
+    var engine = replayEngine();
+    if (!engine || !state.replay.active) return;
+    if (speed) state.replay.speed = speed;
+    state.replay.playing = true;
+    clearInterval(state.replay.timer);
+    state.replay.timer = setInterval(function () { replayStep(1); }, engine.intervalMs(state.replay.speed));
+    postReplay();
+  }
+
+  function replayPause() {
+    state.replay.playing = false;
+    clearInterval(state.replay.timer);
+    state.replay.timer = null;
+    postReplay();
+  }
+
+  function replayStep(delta) {
+    var engine = replayEngine();
+    if (!engine || !state.replay.active) return;
+    var next = engine.step(state.replay.index, state.raw.length, delta || 1);
+    if (next === state.replay.index && (delta || 1) > 0) {
+      replayPause();
+      return;
+    }
+    state.replay.index = next;
+    replayApply(false);
+    if (next >= state.raw.length - 1 && state.replay.playing) replayPause();
+  }
+
+  function replaySeek(index) {
+    var engine = replayEngine();
+    if (!engine || !state.replay.active) return;
+    state.replay.index = engine.clampIndex(index, state.raw.length);
+    replayApply(false);
+  }
+
+  function replayStop(silent) {
+    clearInterval(state.replay.timer);
+    state.replay.timer = null;
+    state.replay.active = false;
+    state.replay.playing = false;
+    state.replay.position = null;
+    applyData(false);
+    if (!silent) postReplay();
+  }
+
+  function replayTrade(action) {
+    var engine = replayEngine();
+    if (!engine || !state.replay.active) return;
+    var visible = visibleRaw();
+    if (!visible.length) return;
+    state.replay.position = engine.trade(state.replay.position, action, visible[visible.length - 1].close);
+    postReplay();
+  }
+
+  function replaySetSpeed(speed) {
+    if (!state.replay.active) return;
+    state.replay.speed = speed;
+    if (state.replay.playing) replayPlay(speed);
+    else postReplay();
   }
 
   // ---- indicators ---------------------------------------------------------
@@ -741,6 +854,14 @@
         case 'updateDrawingText':
           if (window.ChartDeskDrawings) window.ChartDeskDrawings.updateText(payload.id, payload.text);
           break;
+        case 'replayStart': replayStart(payload.index || 0); break;
+        case 'replayPlay': replayPlay(payload.speed); break;
+        case 'replayPause': replayPause(); break;
+        case 'replayStep': replayStep(payload.delta || 1); break;
+        case 'replaySeek': replaySeek(payload.index || 0); break;
+        case 'replayStop': replayStop(false); break;
+        case 'replaySpeed': replaySetSpeed(payload.speed || 1); break;
+        case 'replayTrade': replayTrade(payload.action); break;
         case 'showError': toast(payload.message || 'Chart error'); break;
         default:
           if (window.ChartDeskExt && typeof window.ChartDeskExt.handle === 'function') {

@@ -65,6 +65,8 @@ import com.chartdesk.app.feature.settings.SettingsViewModel
 import com.chartdesk.app.ui.chart.ChartToolbar
 import com.chartdesk.app.ui.chart.DrawingRail
 import com.chartdesk.app.ui.chart.IndicatorsSheet
+import com.chartdesk.app.ui.chart.ReplayBar
+import com.chartdesk.app.ui.chart.ReplayStartSheet
 import com.chartdesk.app.ui.chart.TimeframeSheetContent
 import com.chartdesk.app.ui.settings.SettingsSheet
 import com.chartdesk.app.ui.theme.ChartDeskType
@@ -90,6 +92,7 @@ fun ChartScreen(
     var showTimeframeSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showIndicatorsSheet by remember { mutableStateOf(false) }
+    var showReplaySheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm) {
         vm.events.collect { event ->
@@ -151,6 +154,7 @@ fun ChartScreen(
                     onTimeframeClick = { showTimeframeSheet = true },
                     onChartType = vm::setChartType,
                     onIndicators = { showIndicatorsSheet = true },
+                    onReplay = { showReplaySheet = true },
                     onSettings = { showSettingsSheet = true },
                     onScreenshot = ::takeScreenshot,
                     onToggleFullscreen = onToggleFullscreen,
@@ -183,6 +187,17 @@ fun ChartScreen(
                     }
                     if (state.offline && state.candles.isNotEmpty()) {
                         OfflineBadge(Modifier.align(Alignment.BottomCenter))
+                    }
+                    if (state.replayActive) {
+                        ReplayBar(
+                            state = state,
+                            onPlayPause = vm::toggleReplayPlay,
+                            onStep = vm::stepReplay,
+                            onSpeed = vm::cycleReplaySpeed,
+                            onStop = vm::stopReplay,
+                            onTrade = vm::replayTrade,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
                     }
                 }
             }
@@ -242,6 +257,17 @@ fun ChartScreen(
             onToggle = vm::toggleIndicator,
             onParams = vm::updateIndicatorParams,
             onDismiss = { showIndicatorsSheet = false },
+        )
+    }
+
+    if (showReplaySheet) {
+        ReplayStartSheet(
+            total = state.candles.size,
+            onStart = { index ->
+                showReplaySheet = false
+                vm.startReplay(index)
+            },
+            onDismiss = { showReplaySheet = false },
         )
     }
 

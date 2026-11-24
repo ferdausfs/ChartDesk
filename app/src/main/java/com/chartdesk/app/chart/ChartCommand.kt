@@ -190,6 +190,46 @@ sealed interface ChartCommand {
         override fun payload(): JsonObject = buildJsonObject { }
     }
 
+    data class ReplayStart(val index: Int) : ChartCommand {
+        override val type = "replayStart"
+        override fun payload(): JsonObject = buildJsonObject { put("index", index) }
+    }
+
+    data class ReplayPlay(val speed: Double) : ChartCommand {
+        override val type = "replayPlay"
+        override fun payload(): JsonObject = buildJsonObject { put("speed", speed) }
+    }
+
+    data object ReplayPause : ChartCommand {
+        override val type = "replayPause"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class ReplayStep(val delta: Int) : ChartCommand {
+        override val type = "replayStep"
+        override fun payload(): JsonObject = buildJsonObject { put("delta", delta) }
+    }
+
+    data class ReplaySeek(val index: Int) : ChartCommand {
+        override val type = "replaySeek"
+        override fun payload(): JsonObject = buildJsonObject { put("index", index) }
+    }
+
+    data object ReplayStop : ChartCommand {
+        override val type = "replayStop"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data class ReplaySpeed(val speed: Double) : ChartCommand {
+        override val type = "replaySpeed"
+        override fun payload(): JsonObject = buildJsonObject { put("speed", speed) }
+    }
+
+    data class ReplayTrade(val action: String) : ChartCommand {
+        override val type = "replayTrade"
+        override fun payload(): JsonObject = buildJsonObject { put("action", action) }
+    }
+
     data class SetOptions(
         val grid: Boolean = true,
         val crosshair: Boolean = true,

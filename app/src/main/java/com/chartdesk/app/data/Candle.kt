@@ -1,5 +1,6 @@
 package com.chartdesk.app.data
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -97,7 +98,7 @@ fun formatPrice(price: Double, precision: Int = pricePrecision(price)): String {
     if (price.isNaN() || price.isInfinite()) return "—"
     val scale = Math.pow(10.0, precision.toDouble())
     val rounded = (price * scale).roundToLong() / scale
-    return String.format("%.${precision}f", rounded)
+    return String.format(Locale.US, "%.${precision}f", rounded)
 }
 
 fun formatSignedPercent(value: Double): String {

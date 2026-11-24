@@ -60,6 +60,16 @@ data class ChartUiState(
     val selectedDrawingLocked: Boolean = false,
     val pendingTextId: String? = null,
     val measureText: String? = null,
+    val replayActive: Boolean = false,
+    val replayPlaying: Boolean = false,
+    val replayIndex: Int = 0,
+    val replayTotal: Int = 0,
+    val replaySpeed: Double = 1.0,
+    val replayPrice: Double = 0.0,
+    val replaySide: String? = null,
+    val replayEntry: Double = 0.0,
+    val replayPnl: Double = 0.0,
+    val replayPnlPercent: Double = 0.0,
 )
 
 @HiltViewModel
@@ -101,9 +111,21 @@ class ChartViewModel @Inject constructor(
                     )
                     is ChartEvent.TextRequest -> _state.value = _state.value.copy(pendingTextId = event.id)
                     is ChartEvent.Measure -> _state.value = _state.value.copy(
-                        measureText = "Δ ${String.format("%.4f", event.to - event.from)} (${String.format("%+.2f", event.percent)}%)",
+                        measureText = "Δ ${String.format(java.util.Locale.US, "%.4f", event.to - event.from)} (${String.format(java.util.Locale.US, "%+.2f", event.percent)}%)",
                     )
                     is ChartEvent.ModeChanged -> _state.value = _state.value.copy(drawingMode = event.mode)
+                    is ChartEvent.ReplayState -> _state.value = _state.value.copy(
+                        replayActive = event.active,
+                        replayPlaying = event.playing,
+                        replayIndex = event.index,
+                        replayTotal = event.total,
+                        replaySpeed = event.speed,
+                        replayPrice = event.price,
+                        replaySide = event.side,
+                        replayEntry = event.entry,
+                        replayPnl = event.pnl,
+                        replayPnlPercent = event.pnlPercent,
+                    )
                     else -> Unit
                 }
             }
@@ -259,6 +281,7 @@ class ChartViewModel @Inject constructor(
             closeSymbolPicker()
             return
         }
+        resetReplay()
         _state.value = _state.value.copy(symbol = symbol, showSymbolPicker = false, candles = emptyList())
         controller.send(ChartCommand.SetSymbol(symbol))
         observeIndicators(symbol)
@@ -322,6 +345,34 @@ class ChartViewModel @Inject constructor(
         _state.value = _state.value.copy(measureText = null)
     }
 
+    fun startReplay(index: Int) {
+        controller.send(ChartCommand.ReplayStart(index))
+    }
+
+    fun toggleReplayPlay() {
+        if (_state.value.replayPlaying) controller.send(ChartCommand.ReplayPause)
+        else controller.send(ChartCommand.ReplayPlay(_state.value.replaySpeed))
+    }
+
+    fun stepReplay(delta: Int) {
+        controller.send(ChartCommand.ReplayStep(delta))
+    }
+
+    fun cycleReplaySpeed() {
+        val speeds = listOf(0.5, 1.0, 2.0, 5.0)
+        val current = _state.value.replaySpeed
+        val next = speeds[(speeds.indexOf(current).takeIf { it >= 0 } ?: 0) + 1] ?: speeds.first()
+        controller.send(ChartCommand.ReplaySpeed(next))
+    }
+
+    fun stopReplay() {
+        controller.send(ChartCommand.ReplayStop)
+    }
+
+    fun replayTrade(action: String) {
+        controller.send(ChartCommand.ReplayTrade(action))
+    }
+
     private fun observeIndicators(symbol: String) {
         indicatorsJob?.cancel()
         indicatorsJob = viewModelScope.launch {
@@ -358,6 +409,19 @@ class ChartViewModel @Inject constructor(
         )
     }
 
+    private fun resetReplay() {
+        if (_state.value.replayActive) controller.send(ChartCommand.ReplayStop)
+        _state.value = _state.value.copy(
+            replayActive = false,
+            replayPlaying = false,
+            replayIndex = 0,
+            replayTotal = 0,
+            replaySide = null,
+            replayPnl = 0.0,
+            replayPnlPercent = 0.0,
+        )
+    }
+
     private fun persistIndicators(list: List<IndicatorConfig>) {
         val symbol = _state.value.symbol
         _state.value = _state.value.copy(indicators = list)
@@ -366,6 +430,7 @@ class ChartViewModel @Inject constructor(
 
     fun setTimeframe(tf: String) {
         if (tf == _state.value.timeframe) return
+        resetReplay()
         _state.value = _state.value.copy(timeframe = tf, candles = emptyList())
         controller.send(ChartCommand.SetTimeframe(tf))
         load()

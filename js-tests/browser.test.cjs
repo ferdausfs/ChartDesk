@@ -138,6 +138,28 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   });
   assert.strictEqual(await page.evaluate(() => window.ChartDeskDrawings.__state.drawings.length), 2);
 
+  // Bar replay: start at bar 20, step, paper trade, stop.
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'replayStart', payload: { index: 20 } }));
+  });
+  await page.waitForFunction('window.ChartDesk.state.replay.active === true');
+  assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.replay.index), 20);
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'replayStep', payload: { delta: 1 } }));
+  });
+  assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.replay.index), 21);
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'replayTrade', payload: { action: 'buy' } }));
+  });
+  assert.strictEqual(await page.evaluate(() => window.ChartDesk.state.replay.position.side), 'long');
+
+  await page.evaluate(() => {
+    window.ChartDesk.handle(JSON.stringify({ type: 'replayStop' }));
+  });
+  await page.waitForFunction('window.ChartDesk.state.replay.active === false');
+
   // Unknown commands must be ignored, not thrown.
   await page.evaluate(() => {
     window.ChartDesk.handle(JSON.stringify({ type: 'no-such-command', payload: {} }));

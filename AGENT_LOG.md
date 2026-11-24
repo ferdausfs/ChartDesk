@@ -4,6 +4,24 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 8)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 8 — bar replay.
+- **What changed:** replay helpers (`assets/chart/replay.js`: index clamping, stepping, speed→interval, paper-trade
+  state machine, PnL) plus app-side replay in `app.js` (series truncated to the replay cursor, indicators and
+  drawings recompute on the slice, live updates ignored while replaying, interval timer with 0.5/1/2/5× speed);
+  start-point sheet with a slider; in-chart replay bar (play/pause, ±1 bar, speed, stop, Buy/Sell/Close, live PnL);
+  replay auto-stops on symbol/timeframe change; Kotlin bridge commands and `replayState` event.
+- **Touched files:** `assets/chart/{replay.js,app.js,index.html}`, `chart/{ChartCommand,ChartEvent,ChartProtocol}.kt`,
+  `feature/chart/ChartViewModel.kt`, `ui/chart/{ReplayBar.kt,ChartToolbar.kt}`, `ui/screens/ChartScreen.kt`,
+  `data/Candle.kt` (Locale.US formatting), `js-tests/{replay.test.cjs,browser.test.cjs,package.json}`.
+- **Verification:** 36/36 JS tests (replay maths + headless browser starting at bar 20, stepping, paper-buy, stop);
+  `./gradlew assembleDebug testDebugUnitTest` green.
+- **Commit:** `__HASH8__`.
+- **Pending:** feature 9 (Pine subset).
+- **Notes:** paper trades are intentionally local to the replay session (not persisted) and reset when replay stops.
+
 ## 2026-11-24 — Session 1 (feature 7)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -20,7 +38,7 @@ Newest entries first. Never delete an entry.
   `app/src/test/.../DrawingCodecTest.kt`.
 - **Verification:** 28/28 JS tests (drawing module + headless browser drawing a trendline with two real mouse clicks,
   undo → 0, redo → 1); `./gradlew assembleDebug testDebugUnitTest` green.
-- **Commit:** `__HASH7__`.
+- **Commit:** `88b926d`.
 - **Pending:** feature 8 (bar replay).
 - **Notes:** canvas pointer events are only enabled in select/tool mode so chart panning keeps working; long-press
   drag on drawings is intentionally not used because the canvas already owns the gesture.
