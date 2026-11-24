@@ -4,6 +4,27 @@ Newest entries first. Never delete an entry.
 
 ---
 
+## 2026-11-24 — Session 1 (feature 7)
+
+- **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
+- **Feature:** 7 — drawing tools.
+- **What changed:** canvas overlay (`assets/chart/drawings.js`) bound to the chart's time/price scales with
+  11 tools (trendline, ray, horizontal, vertical, rectangle, fib retracement, fib channel, text, long position,
+  short position, measure); select/move by handles, lock, delete, clear, undo/redo with 60-step history; text label
+  dialog driven from Kotlin; measure read-out posted to the shell; per-symbol persistence in Room v4 (`drawings`
+  table + migration); collapsible left drawing rail with pointer/select modes; drawings survive chart-type changes
+  because the module gets the new series reference.
+- **Touched files:** `assets/chart/{drawings.js,index.html,app.js}`, `data/drawings/*`, `data/db/ChartDeskDatabase.kt`,
+  `di/DatabaseModule.kt`, `chart/{ChartCommand,ChartEvent,ChartProtocol}.kt`, `feature/chart/ChartViewModel.kt`,
+  `ui/chart/DrawingRail.kt`, `ui/screens/ChartScreen.kt`, `js-tests/drawings.test.cjs`,
+  `app/src/test/.../DrawingCodecTest.kt`.
+- **Verification:** 28/28 JS tests (drawing module + headless browser drawing a trendline with two real mouse clicks,
+  undo → 0, redo → 1); `./gradlew assembleDebug testDebugUnitTest` green.
+- **Commit:** `__HASH7__`.
+- **Pending:** feature 8 (bar replay).
+- **Notes:** canvas pointer events are only enabled in select/tool mode so chart panning keeps working; long-press
+  drag on drawings is intentionally not used because the canvas already owns the gesture.
+
 ## 2026-11-24 — Session 1 (feature 6)
 
 - **Agent / tool:** OpenCode Android agent; `dev-server` for build/tests/git.
@@ -19,7 +40,7 @@ Newest entries first. Never delete an entry.
   `app/src/test/.../IndicatorCatalogTest.kt`.
 - **Verification:** 24/24 JS tests (12 indicator math suites + headless browser adding MA/RSI/MACD → 2 panes, removing
   them → 0 panes); `./gradlew assembleDebug testDebugUnitTest` green.
-- **Commit:** `__HASH6__`.
+- **Commit:** `c6beba5`.
 - **Pending:** feature 7 (drawing tools).
 - **Notes:** Kotlin `IndicatorCatalog` must stay in sync with `registry` in `indicators.js` (ids, params, defaults).
   Panes are separate lightweight-charts instances; only the bottom pane shows the time axis.

@@ -38,6 +38,17 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `drawings` (" +
+                "`symbol` TEXT NOT NULL, `id` TEXT NOT NULL, `type` TEXT NOT NULL, `payloadJson` TEXT NOT NULL, " +
+                "`locked` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`symbol`, `id`))",
+        )
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -46,7 +57,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): ChartDeskDatabase =
         Room.databaseBuilder(context, ChartDeskDatabase::class.java, "chartdesk.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
@@ -61,4 +72,7 @@ object DatabaseModule {
 
     @Provides
     fun provideIndicatorDao(db: ChartDeskDatabase) = db.indicatorDao()
+
+    @Provides
+    fun provideDrawingDao(db: ChartDeskDatabase) = db.drawingDao()
 }

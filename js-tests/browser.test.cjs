@@ -114,6 +114,30 @@ test('chart page boots and applies bridge commands without errors', async (t) =>
   await page.waitForFunction("Object.keys(window.ChartDesk.state.panes).length === 0");
   assert.strictEqual(await page.evaluate(() => document.querySelectorAll('.pane').length), 0);
 
+  // Drawing layer: draw a trendline with two taps, then undo/redo it.
+  await page.evaluate(() => window.ChartDeskDrawings.setTool('trendline'));
+  const box = await page.$eval('#drawings-canvas', (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  });
+  await page.mouse.click(box.x + box.w * 0.25, box.y + box.h * 0.3);
+  await page.mouse.click(box.x + box.w * 0.55, box.y + box.h * 0.6);
+  await page.waitForFunction('window.ChartDeskDrawings.__state.drawings.length === 1');
+  assert.strictEqual(await page.evaluate(() => window.ChartDeskDrawings.getDrawings()[0].type), 'trendline');
+
+  await page.evaluate(() => window.ChartDeskDrawings.undo());
+  await page.waitForFunction('window.ChartDeskDrawings.__state.drawings.length === 0');
+  await page.evaluate(() => window.ChartDeskDrawings.redo());
+  await page.waitForFunction('window.ChartDeskDrawings.__state.drawings.length === 1');
+
+  await page.evaluate(() => {
+    window.ChartDeskDrawings.setDrawings([
+      { id: 'x1', type: 'hline', points: [{ time: null, price: 100 }], locked: true },
+      { id: 'x2', type: 'rect', points: [{ time: 1700000000, price: 90 }, { time: 1700003000, price: 110 }], locked: false },
+    ]);
+  });
+  assert.strictEqual(await page.evaluate(() => window.ChartDeskDrawings.__state.drawings.length), 2);
+
   // Unknown commands must be ignored, not thrown.
   await page.evaluate(() => {
     window.ChartDesk.handle(JSON.stringify({ type: 'no-such-command', payload: {} }));

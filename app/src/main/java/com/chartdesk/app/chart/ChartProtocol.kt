@@ -2,6 +2,7 @@ package com.chartdesk.app.chart
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -35,6 +36,16 @@ object ChartEventParser {
                         volume = dbl("volume"),
                     )
                 }
+                "drawingsChanged" -> ChartEvent.DrawingsChanged(
+                    com.chartdesk.app.data.drawings.DrawingCodec.parseBridgeList(json, payload),
+                )
+                "drawingSelected" -> ChartEvent.DrawingSelected(
+                    id = payload["id"]?.jsonPrimitive?.contentOrNull,
+                    locked = payload["locked"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                )
+                "textRequest" -> ChartEvent.TextRequest(str("id") ?: "")
+                "measure" -> ChartEvent.Measure(dbl("from"), dbl("to"), dbl("pct"))
+                "modeChanged" -> ChartEvent.ModeChanged(str("mode") ?: "none")
                 "haptic" -> ChartEvent.Haptic(str("kind") ?: "tap")
                 "error" -> ChartEvent.ChartError(str("message") ?: "chart error", str("command"))
                 "ack" -> ChartEvent.Ack(str("id") ?: "")

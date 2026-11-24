@@ -10,6 +10,8 @@ import com.chartdesk.app.chart.ChartEvent
 import com.chartdesk.app.data.Candle
 import com.chartdesk.app.data.ChartRequestBus
 import com.chartdesk.app.data.changePercent
+import com.chartdesk.app.data.drawings.DrawingDto
+import com.chartdesk.app.data.drawings.DrawingRepository
 import com.chartdesk.app.data.indicators.IndicatorCatalog
 import com.chartdesk.app.data.indicators.IndicatorConfig
 import com.chartdesk.app.data.indicators.IndicatorRepository
@@ -52,6 +54,12 @@ data class ChartUiState(
     val isSearching: Boolean = false,
     val showSymbolPicker: Boolean = false,
     val indicators: List<IndicatorConfig> = emptyList(),
+    val drawingMode: String = "none",
+    val drawingTool: String = "none",
+    val selectedDrawingId: String? = null,
+    val selectedDrawingLocked: Boolean = false,
+    val pendingTextId: String? = null,
+    val measureText: String? = null,
 )
 
 @HiltViewModel
@@ -60,6 +68,7 @@ class ChartViewModel @Inject constructor(
     private val repository: MarketRepository,
     private val settingsRepository: SettingsRepository,
     private val indicatorRepository: IndicatorRepository,
+    private val drawingRepository: DrawingRepository,
     private val requestBus: ChartRequestBus,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -73,6 +82,8 @@ class ChartViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var searchJob: Job? = null
     private var indicatorsJob: Job? = null
+    private var drawingsJob: Job? = null
+    private var lastSentDrawings: String = ""
     private var everConnected = false
 
     init {
@@ -83,6 +94,16 @@ class ChartViewModel @Inject constructor(
                         hovered = Candle(event.time, event.open, event.high, event.low, event.close, event.volume),
                     )
                     is ChartEvent.ChartError -> _state.value = _state.value.copy(error = event.message)
+                    is ChartEvent.DrawingsChanged -> persistDrawings(event.list)
+                    is ChartEvent.DrawingSelected -> _state.value = _state.value.copy(
+                        selectedDrawingId = event.id,
+                        selectedDrawingLocked = event.locked,
+                    )
+                    is ChartEvent.TextRequest -> _state.value = _state.value.copy(pendingTextId = event.id)
+                    is ChartEvent.Measure -> _state.value = _state.value.copy(
+                        measureText = "Δ ${String.format("%.4f", event.to - event.from)} (${String.format("%+.2f", event.percent)}%)",
+                    )
+                    is ChartEvent.ModeChanged -> _state.value = _state.value.copy(drawingMode = event.mode)
                     else -> Unit
                 }
             }
@@ -100,6 +121,7 @@ class ChartViewModel @Inject constructor(
             applySettings(initial, initialLoad = true)
             sendInit(initial)
             observeIndicators(_state.value.symbol)
+            observeDrawings(_state.value.symbol)
             load()
             settingsRepository.settings.drop(1).collect { applySettings(it, initialLoad = false) }
         }
@@ -240,7 +262,64 @@ class ChartViewModel @Inject constructor(
         _state.value = _state.value.copy(symbol = symbol, showSymbolPicker = false, candles = emptyList())
         controller.send(ChartCommand.SetSymbol(symbol))
         observeIndicators(symbol)
+        observeDrawings(symbol)
         load()
+    }
+
+    private fun observeDrawings(symbol: String) {
+        drawingsJob?.cancel()
+        lastSentDrawings = ""
+        drawingsJob = viewModelScope.launch {
+            drawingRepository.observe(symbol).collect { list ->
+                val fingerprint = list.joinToString("|") { "${it.id}:${it.type}:${it.locked}:${it.points.size}" }
+                if (fingerprint == lastSentDrawings) return@collect
+                lastSentDrawings = fingerprint
+                controller.send(ChartCommand.SetDrawings(list))
+            }
+        }
+    }
+
+    private fun persistDrawings(list: List<DrawingDto>) {
+        val symbol = _state.value.symbol
+        lastSentDrawings = list.joinToString("|") { "${it.id}:${it.type}:${it.locked}:${it.points.size}" }
+        viewModelScope.launch { drawingRepository.replaceAll(symbol, list) }
+    }
+
+    fun setDrawingTool(tool: String) {
+        _state.value = _state.value.copy(drawingTool = tool, drawingMode = if (tool == "none") "none" else "select")
+        if (tool == "none") controller.send(ChartCommand.SetDrawMode("none"))
+        else controller.send(ChartCommand.SetDrawTool(tool))
+    }
+
+    fun setDrawingMode(mode: String) {
+        _state.value = _state.value.copy(drawingMode = mode, drawingTool = "none")
+        controller.send(ChartCommand.SetDrawMode(mode))
+    }
+
+    fun undoDrawing() = controller.send(ChartCommand.UndoDrawing)
+
+    fun redoDrawing() = controller.send(ChartCommand.RedoDrawing)
+
+    fun deleteDrawing() = controller.send(ChartCommand.DeleteDrawing)
+
+    fun clearDrawings() = controller.send(ChartCommand.ClearDrawings)
+
+    fun toggleDrawingLock() {
+        controller.send(ChartCommand.LockDrawing(!_state.value.selectedDrawingLocked))
+    }
+
+    fun submitDrawingText(text: String) {
+        val id = _state.value.pendingTextId ?: return
+        controller.send(ChartCommand.UpdateDrawingText(id, text))
+        _state.value = _state.value.copy(pendingTextId = null)
+    }
+
+    fun dismissDrawingText() {
+        _state.value = _state.value.copy(pendingTextId = null)
+    }
+
+    fun clearMeasure() {
+        _state.value = _state.value.copy(measureText = null)
     }
 
     private fun observeIndicators(symbol: String) {
@@ -326,6 +405,7 @@ class ChartViewModel @Inject constructor(
         loadJob?.cancel()
         searchJob?.cancel()
         indicatorsJob?.cancel()
+        drawingsJob?.cancel()
         super.onCleared()
     }
 }

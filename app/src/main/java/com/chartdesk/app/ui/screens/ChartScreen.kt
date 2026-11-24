@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +63,7 @@ import com.chartdesk.app.feature.chart.ChartUiState
 import com.chartdesk.app.feature.chart.ChartViewModel
 import com.chartdesk.app.feature.settings.SettingsViewModel
 import com.chartdesk.app.ui.chart.ChartToolbar
+import com.chartdesk.app.ui.chart.DrawingRail
 import com.chartdesk.app.ui.chart.IndicatorsSheet
 import com.chartdesk.app.ui.chart.TimeframeSheetContent
 import com.chartdesk.app.ui.settings.SettingsSheet
@@ -96,6 +99,12 @@ fun ChartScreen(
                 else -> Unit
             }
         }
+    }
+
+    LaunchedEffect(state.measureText) {
+        val text = state.measureText ?: return@LaunchedEffect
+        snackbar.showSnackbar(text)
+        vm.clearMeasure()
     }
 
     LaunchedEffect(fullscreen) {
@@ -147,23 +156,65 @@ fun ChartScreen(
                     onToggleFullscreen = onToggleFullscreen,
                 )
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                ChartWebView(vm.controller, Modifier.fillMaxSize())
-                when {
-                    state.isLoading && state.candles.isEmpty() -> LoadingOverlay()
-                    state.error != null && state.candles.isEmpty() -> ErrorOverlay(
-                        message = state.error ?: "Market data unavailable",
-                        onRetry = { vm.load() },
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                if (!fullscreen) {
+                    DrawingRail(
+                        mode = state.drawingMode,
+                        tool = state.drawingTool,
+                        hasSelection = state.selectedDrawingId != null,
+                        locked = state.selectedDrawingLocked,
+                        onTool = vm::setDrawingTool,
+                        onMode = vm::setDrawingMode,
+                        onUndo = vm::undoDrawing,
+                        onRedo = vm::redoDrawing,
+                        onDelete = vm::deleteDrawing,
+                        onLock = vm::toggleDrawingLock,
+                        onClear = vm::clearDrawings,
                     )
                 }
-                if (state.offline && state.candles.isNotEmpty()) {
-                    OfflineBadge(Modifier.align(Alignment.BottomCenter))
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    ChartWebView(vm.controller, Modifier.fillMaxSize())
+                    when {
+                        state.isLoading && state.candles.isEmpty() -> LoadingOverlay()
+                        state.error != null && state.candles.isEmpty() -> ErrorOverlay(
+                            message = state.error ?: "Market data unavailable",
+                            onRetry = { vm.load() },
+                        )
+                    }
+                    if (state.offline && state.candles.isNotEmpty()) {
+                        OfflineBadge(Modifier.align(Alignment.BottomCenter))
+                    }
                 }
             }
         }
         SnackbarHost(
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+        )
+    }
+
+    if (state.pendingTextId != null) {
+        var label by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = vm::dismissDrawingText,
+            containerColor = palette.surface,
+            title = { Text("Drawing label", color = palette.textPrimary) },
+            text = {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.submitDrawingText(label.ifBlank { "Text" }) }) {
+                    Text("Save", color = palette.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::dismissDrawingText) { Text("Cancel", color = palette.textSecondary) }
+            },
         )
     }
 

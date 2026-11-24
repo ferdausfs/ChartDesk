@@ -62,6 +62,29 @@ data class WatchlistItemEntity(
     val sortOrder: Int,
 )
 
+@Entity(tableName = "drawings", primaryKeys = ["symbol", "id"])
+data class DrawingEntity(
+    val symbol: String,
+    val id: String,
+    val type: String,
+    val payloadJson: String,
+    val locked: Boolean,
+    val sortOrder: Int,
+    val updatedAt: Long,
+)
+
+@Dao
+interface DrawingDao {
+    @Query("SELECT * FROM drawings WHERE symbol = :symbol ORDER BY sortOrder")
+    fun observe(symbol: String): Flow<List<DrawingEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(rows: List<DrawingEntity>)
+
+    @Query("DELETE FROM drawings WHERE symbol = :symbol")
+    suspend fun deleteAll(symbol: String)
+}
+
 @Entity(tableName = "indicators", primaryKeys = ["symbol", "uid"])
 data class IndicatorEntity(
     val symbol: String,
@@ -157,8 +180,9 @@ interface WatchlistDao {
         WatchlistEntity::class,
         WatchlistItemEntity::class,
         IndicatorEntity::class,
+        DrawingEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class ChartDeskDatabase : RoomDatabase() {
@@ -166,4 +190,5 @@ abstract class ChartDeskDatabase : RoomDatabase() {
     abstract fun symbolDao(): SymbolDao
     abstract fun watchlistDao(): WatchlistDao
     abstract fun indicatorDao(): IndicatorDao
+    abstract fun drawingDao(): DrawingDao
 }

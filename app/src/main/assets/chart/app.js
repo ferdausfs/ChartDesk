@@ -327,6 +327,7 @@
     if (state.lastPriceLine) state.lastPriceLine = null;
     addMainSeries(type);
     state.raw = data;
+    if (window.ChartDeskDrawings) window.ChartDeskDrawings.setSeries(state.mainSeries);
     applyData(false);
     for (var i = 0; i < hooks.afterSeries.length; i++) {
       try { hooks.afterSeries[i](); } catch (e) { console.warn(e); }
@@ -713,6 +714,33 @@
         case 'setPrecision': state.precision = payload.precision; applyData(false); break;
         case 'setOptions': setOptions(payload); break;
         case 'setIndicators': setIndicators(payload.list); break;
+        case 'setDrawings':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setDrawings(payload.list || []);
+          break;
+        case 'setDrawTool':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setTool(payload.tool);
+          break;
+        case 'setDrawMode':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setMode(payload.mode);
+          break;
+        case 'undoDrawing':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.undo();
+          break;
+        case 'redoDrawing':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.redo();
+          break;
+        case 'deleteDrawing':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.deleteSelected();
+          break;
+        case 'lockDrawing':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.setLocked(!!payload.locked);
+          break;
+        case 'clearDrawings':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.clear();
+          break;
+        case 'updateDrawingText':
+          if (window.ChartDeskDrawings) window.ChartDeskDrawings.updateText(payload.id, payload.text);
+          break;
         case 'showError': toast(payload.message || 'Chart error'); break;
         default:
           if (window.ChartDeskExt && typeof window.ChartDeskExt.handle === 'function') {
@@ -811,6 +839,15 @@
     renderLegend(null);
     hooks.afterData.push(function (candles) { computeAll(candles); });
     hooks.afterSeries.push(function () { computeAll(state.raw); });
+    if (window.ChartDeskDrawings) {
+      window.ChartDeskDrawings.init({
+        chart: state.chart,
+        mainSeries: state.mainSeries,
+        container: els.chart,
+        post: post,
+        palette: palette,
+      });
+    }
     window.ChartDesk = {
       handle: handle,
       state: state,

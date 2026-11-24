@@ -127,6 +127,69 @@ sealed interface ChartCommand {
         }
     }
 
+    data class SetDrawings(val list: List<com.chartdesk.app.data.drawings.DrawingDto>) : ChartCommand {
+        override val type = "setDrawings"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("list", JsonArray(list.map { dto ->
+                buildJsonObject {
+                    put("id", dto.id)
+                    put("type", dto.type)
+                    put("locked", dto.locked)
+                    dto.text?.let { put("text", it) }
+                    put("points", JsonArray(dto.points.map { point ->
+                        buildJsonObject {
+                            point.time?.let { put("time", it) }
+                            put("price", point.price)
+                        }
+                    }))
+                }
+            }))
+        }
+    }
+
+    data class SetDrawTool(val tool: String) : ChartCommand {
+        override val type = "setDrawTool"
+        override fun payload(): JsonObject = buildJsonObject { put("tool", tool) }
+    }
+
+    data class SetDrawMode(val mode: String) : ChartCommand {
+        override val type = "setDrawMode"
+        override fun payload(): JsonObject = buildJsonObject { put("mode", mode) }
+    }
+
+    data class LockDrawing(val locked: Boolean) : ChartCommand {
+        override val type = "lockDrawing"
+        override fun payload(): JsonObject = buildJsonObject { put("locked", locked) }
+    }
+
+    data class UpdateDrawingText(val id: String, val text: String) : ChartCommand {
+        override val type = "updateDrawingText"
+        override fun payload(): JsonObject = buildJsonObject {
+            put("id", id)
+            put("text", text)
+        }
+    }
+
+    data object UndoDrawing : ChartCommand {
+        override val type = "undoDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object RedoDrawing : ChartCommand {
+        override val type = "redoDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object DeleteDrawing : ChartCommand {
+        override val type = "deleteDrawing"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
+    data object ClearDrawings : ChartCommand {
+        override val type = "clearDrawings"
+        override fun payload(): JsonObject = buildJsonObject { }
+    }
+
     data class SetOptions(
         val grid: Boolean = true,
         val crosshair: Boolean = true,
